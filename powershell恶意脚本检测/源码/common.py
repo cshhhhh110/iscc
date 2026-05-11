@@ -27,7 +27,7 @@ LABELS = [0, 1, 2]
 TARGET_COLUMN = "label"
 ID_COLUMN = "name"
 FEATURE_COUNT = 15
-ARTIFACT_VERSION = "v1.7"
+ARTIFACT_VERSION = "v1.8"
 
 
 def append_log(message: str) -> None:
@@ -151,22 +151,86 @@ def pseudo_label_test(
     test_df: pd.DataFrame,
     features: list[str],
     threshold: float = 0.95,
+    max_per_class: dict[int, int] | None = None,
     device=None,
-) -> tuple[pd.DataFrame, int]:
+) -> tuple[pd.DataFrame, dict[str, int]]:
     """Predict test set with bundle, return high-confidence pseudo-labeled samples.
 
-    Returns (pseudo_labeled_df, count).
-    pseudo_labeled_df has columns: features + 'label' + '_pseudo' flag
+    Returns (pseudo_labeled_df, stats).
+    stats: {threshold, total, per_class_N, capped_from}
     """
     proba = predict_bundle_proba(bundle, test_df, device=device)
     max_proba = proba.max(axis=1)
     pseudo_labels = np.argmax(proba, axis=1).astype(int)
 
     mask = max_proba >= threshold
+    df_full = pd.DataFrame({
+        "__max_proba": max_proba,
+        "__pseudo_label": pseudo_labels,
+    }, index=test_df.index)
+
+    capped = {}
+    for cls in sorted(np.unique(pseudo_labels)):
+        cls_mask = mask & (pseudo_labels == cls)
+        cls_indices = test_df.index[cls_mask]
+        cap = max_per_class.get(int(cls)) if max_per_class else None
+        if cap is not None and len(cls_indices) > cap:
+            # keep top-cap by confidence
+            cls_scores = df_full.loc[cls_indices, "__max_proba"].sort_values(ascending=False)
+            keep = cls_scores.index[:cap]
+            drop = cls_scores.index[cap:]
+            mask[drop] = False
+            capped[str(cls)] = int(len(drop))
+
     pseudo_df = test_df.loc[mask, features].copy()
     pseudo_df["label"] = pseudo_labels[mask]
     pseudo_df["_pseudo"] = True
-    return pseudo_df, int(mask.sum())
+
+    stats = {
+        "threshold": float(threshold),
+        "total": int(mask.sum()),
+        "per_class": {int(k): int(v) for k, v in pd.Series(pseudo_labels[mask]).value_counts().to_dict().items()},
+        "capped": capped,
+    }
+    return pseudo_df, stats
+
+
+def scan_pseudo_thresholds(
+    bundle: dict,
+    test_df: pd.DataFrame,
+    features: list[str],
+    label_counts: dict[int, int],
+    thresholds: list[float] | None = None,
+    cap_ratio: float = 0.20,
+    min_samples: int = 200,
+    device=None,
+) -> list[dict[str, object]]:
+    """Scan thresholds for pseudo-label selection, return sorted by quality.
+
+    Returns list of {threshold, total, per_class, capped, score}.
+    score = total / max_possible but penalized for imbalance.
+    """
+    if thresholds is None:
+        thresholds = [0.99, 0.97, 0.95, 0.92, 0.90, 0.85, 0.80]
+
+    max_per_class = {int(k): max(1, int(v * cap_ratio)) for k, v in label_counts.items()}
+    results = []
+    for th in thresholds:
+        _, stats = pseudo_label_test(bundle, test_df, features, threshold=th, max_per_class=max_per_class, device=device)
+        if stats["total"] < min_samples:
+            continue
+        # Score: prefer more samples and balanced classes
+        per_class = stats.get("per_class", {})
+        if per_class:
+            counts = np.array(list(per_class.values()), dtype=np.float32)
+            balance = 1.0 - float(counts.std() / (counts.mean() + 1e-9))
+        else:
+            balance = 0.0
+        score = float(stats["total"]) * (0.5 + 0.5 * max(0.0, balance))
+        results.append({**stats, "score": round(score, 1), "max_per_class": {int(k): int(v) for k, v in max_per_class.items()}})
+
+    results.sort(key=lambda r: r["score"], reverse=True)
+    return results
 
 
 def load_train(path: Path = TRAIN_PATH) -> pd.DataFrame:

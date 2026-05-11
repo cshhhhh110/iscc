@@ -26,14 +26,13 @@ from common import (
     build_hgb_model,
     build_lgb_model,
     build_xgboost_model,
-    compute_adversarial_weights,
     dump_joblib_atomic,
     feature_columns,
     load_train,
     load_test,
-    predict_bundle_proba,
     pseudo_label_test,
     sample_weighted_indices,
+    scan_pseudo_thresholds,
     validate_features,
     write_json,
 )
@@ -1303,37 +1302,55 @@ def main() -> int:
     class2_grid = float_grid(1.20, 1.60, 0.025)
     tree_blend_grid = [round(x, 3) for x in np.linspace(0.0, 1.0, 21)]
 
-    adv_weights = None
-    adv_auc = None
-    if args.adversarial:
-        test_df_adv = load_test()
-        adv_weights, adv_auc = compute_adversarial_weights(
-            train_df, test_df_adv, features, random_state=args.seed,
-        )
-        del test_df_adv
-
-    # first training pass
-    bundle, report, candidate_scores, oof_f1 = _run_training_pass(
-        train_df, features, cardinalities, adv_weights, adv_auc,
+    # adversary removed (v1.7 proved it hurts); build teacher once
+    bundle_t, report_t, scores_t, oof_t = _run_training_pass(
+        train_df, features, cardinalities, None, None,
         args, device, temperature_grid, class1_grid, class2_grid, tree_blend_grid,
     )
 
-    # pseudo-label: predict test, merge high-confidence samples, retrain
+    pseudo_log = None
     if args.pseudo_label:
         test_df_pl = load_test()
-        pseudo_df, n_pseudo = pseudo_label_test(
-            bundle, test_df_pl, features,
-            threshold=args.pseudo_threshold, device=device,
+        label_dist = {int(k): int(v) for k, v in train_df["label"].value_counts().to_dict().items()}
+        scan = scan_pseudo_thresholds(
+            bundle_t, test_df_pl, features, label_dist,
+            thresholds=[0.99, 0.97, 0.95, 0.92, 0.90, 0.85],
+            cap_ratio=0.20, min_samples=200, device=device,
         )
-        if n_pseudo > 100:
-            train_df_ext = pd.concat([train_df, pseudo_df], ignore_index=True)
-            # update cardinalities for extended dataset (may have new values)
-            cardinalities_ext = infer_cardinalities(train_df_ext, features)
-            bundle, report, candidate_scores, oof_f1 = _run_training_pass(
-                train_df_ext, features, cardinalities_ext, adv_weights, adv_auc,
-                args, device, temperature_grid, class1_grid, class2_grid, tree_blend_grid,
+        if scan:
+            best = scan[0]
+            pseudo_df, _ = pseudo_label_test(
+                bundle_t, test_df_pl, features,
+                threshold=best["threshold"],
+                max_per_class=best.get("max_per_class"),
+                device=device,
             )
+            if len(pseudo_df) >= 200:
+                train_df_ext = pd.concat([train_df, pseudo_df], ignore_index=True)
+                cardinalities_ext = infer_cardinalities(train_df_ext, features)
+                bundle_s, report_s, scores_s, oof_s = _run_training_pass(
+                    train_df_ext, features, cardinalities_ext, None, None,
+                    args, device, temperature_grid, class1_grid, class2_grid, tree_blend_grid,
+                )
+                pseudo_log = {
+                    "teacher_oof": round(float(oof_t), 6),
+                    "student_oof": round(float(oof_s), 6),
+                    "threshold_scan": scan[:5],
+                    "selected_threshold": best["threshold"],
+                    "pseudo_samples": int(len(pseudo_df)),
+                    "pseudo_per_class": {int(k): int(v) for k, v in pseudo_df["label"].value_counts().to_dict().items()},
+                }
+                bundle, report, candidate_scores, oof_f1 = bundle_s, report_s, scores_s, oof_s
+            else:
+                bundle, report, candidate_scores, oof_f1 = bundle_t, report_t, scores_t, oof_t
+        else:
+            bundle, report, candidate_scores, oof_f1 = bundle_t, report_t, scores_t, oof_t
         del test_df_pl
+    else:
+        bundle, report, candidate_scores, oof_f1 = bundle_t, report_t, scores_t, oof_t
+
+    if pseudo_log:
+        report["pseudo_label"] = pseudo_log
 
     # save
     model_output = Path(args.model_output)
@@ -1369,6 +1386,10 @@ def main() -> int:
     print(f"Device: {device}")
     print(f"Selected model: {bundle['selected_model']}")
     print(f"OOF Macro-F1: {report['oof_macro_f1']:.6f}")
+    if pseudo_log:
+        print(f"Teacher OOF: {pseudo_log['teacher_oof']}")
+        print(f"Student OOF: {pseudo_log['student_oof']}")
+        print(f"Pseudo samples: {pseudo_log['pseudo_samples']} @ th={pseudo_log['selected_threshold']}")
     print(f"Train time: {train_seconds / 60:.1f} min")
     print(f"Saved model: {model_output}")
     print(f"Saved report: {report_output}")

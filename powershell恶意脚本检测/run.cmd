@@ -3,8 +3,8 @@ setlocal
 set "PY=%USERPROFILE%\.conda\envs\iscc-gpu\python.exe"
 set "SRC=%~dp0ิดย๋"
 
-echo ===== TRAIN %time% =====
-"%PY%" "%SRC%\train.py" --device auto --adversarial
+echo ===== TEACHER TRAIN %time% =====
+"%PY%" "%SRC%\train.py" --device auto --pseudo-label
 if errorlevel 1 (echo FAILED & pause & exit /b 1)
 
 echo ===== PREDICT %time% =====
