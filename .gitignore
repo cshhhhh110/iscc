@@ -37,6 +37,9 @@ Desktop.ini
 **/binaries/
 **/docker容器/
 
+# === 版本记录 (仅本地保留，不进 GitHub) ===
+**/版本记录/
+
 # === 大 CSV 数据文件 (超过50MB) ===
 系统日志异常检测挑战/train.csv
 系统日志异常检测挑战/test.csv

@@ -1,9 +1,0 @@
-numpy
-scipy
-pandas
-scikit-learn
-joblib
-tqdm
-pefile
-lief
-torch
