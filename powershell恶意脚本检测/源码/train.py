@@ -30,6 +30,7 @@ from common import (
     feature_columns,
     load_train,
     load_test,
+    predict_bundle_proba,
     pseudo_label_test,
     sample_weighted_indices,
     scan_pseudo_thresholds,
