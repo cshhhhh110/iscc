@@ -116,3 +116,14 @@
 [2026-05-11 09:58:26] Training started for system log anomaly detection (v1.3 SGD).
 [2026-05-11 09:58:36] Training started for system log anomaly detection (v1.3 SGD).
 [2026-05-11 12:10:37] Training started for system log anomaly detection (v1.3 SGD).
+[2026-05-11 18:32:20] Training started (BiLSTM v2).
+[2026-05-11 18:49:00] NN Fold 1: best_epoch=23, val_score=0.949792.
+[2026-05-11 19:06:20] NN Fold 2: best_epoch=25, val_score=0.959718.
+[2026-05-11 19:22:07] NN Fold 3: best_epoch=19, val_score=0.960025.
+[2026-05-11 19:39:49] NN Fold 4: best_epoch=30, val_score=0.952654.
+[2026-05-11 19:57:41] NN Fold 5: best_epoch=30, val_score=0.960424.
+[2026-05-11 19:57:41] NN OOF score=0.956514, final_epochs=25.
+[2026-05-11 20:15:43] NN Training completed: model=E:\赛题数据\系统日志异常检测挑战\模型\model_bundle_nn_v2.joblib, submission=E:\赛题数据\系统日志异常检测挑战\提交结果\submission_nn_v2.csv.
+
+[2026-05-11 20:24:17] v1.4 BiLSTM v2: platform 0.885 (+0.056 from v1.3 0.829). SVD 524K→300dim + BiLSTM 2×256 + argmax decoder. OOF 0.9565.
+[2026-05-11 20:24:17] Archived v1.4 to 版本记录/v1.4/ (源码, 模型, 提交结果).

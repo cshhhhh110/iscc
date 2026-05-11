@@ -1,0 +1,85 @@
+{
+  "version": 4,
+  "model": "BiLSTM_v2",
+  "train_rows": 20000,
+  "test_rows": 5000,
+  "folds": 5,
+  "epochs": 30,
+  "patience": 8,
+  "batch_size": 32,
+  "lr": 0.001,
+  "weight_decay": 0.0001,
+  "grad_clip": 1.0,
+  "hidden_dim": 256,
+  "dropout": 0.35,
+  "lstm_layers": 2,
+  "input_dim": 300,
+  "final_epochs": 25,
+  "best_epochs": [
+    23,
+    25,
+    19,
+    30,
+    30
+  ],
+  "oof_metrics": {
+    "score": 0.9565135311226451,
+    "f1_detect": 0.9999490556536952,
+    "iou_loc": 0.915035297280325,
+    "f1_type": 0.9971529260983669,
+    "eligible_anomaly_rows": 11361
+  },
+  "fold_reports": [
+    {
+      "fold": 1,
+      "train_rows": 16000,
+      "valid_rows": 4000,
+      "best_epoch": 23,
+      "val_loss": 0.04424,
+      "val_score": 0.949792
+    },
+    {
+      "fold": 2,
+      "train_rows": 16000,
+      "valid_rows": 4000,
+      "best_epoch": 25,
+      "val_loss": 0.039957,
+      "val_score": 0.959718
+    },
+    {
+      "fold": 3,
+      "train_rows": 16000,
+      "valid_rows": 4000,
+      "best_epoch": 19,
+      "val_loss": 0.042186,
+      "val_score": 0.960025
+    },
+    {
+      "fold": 4,
+      "train_rows": 16000,
+      "valid_rows": 4000,
+      "best_epoch": 30,
+      "val_loss": 0.039293,
+      "val_score": 0.952654
+    },
+    {
+      "fold": 5,
+      "train_rows": 16000,
+      "valid_rows": 4000,
+      "best_epoch": 30,
+      "val_loss": 0.042213,
+      "val_score": 0.960424
+    }
+  ],
+  "submission_validation": {
+    "rows": 5000,
+    "columns": [
+      "id",
+      "has_anomaly",
+      "primary_start_idx",
+      "primary_end_idx",
+      "primary_anomaly_type",
+      "all_spans"
+    ]
+  }
+}

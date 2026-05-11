@@ -1,0 +1,64 @@
+{
+  "model_version": "v2.4",
+  "device": "cuda",
+  "byte_length": 8192,
+  "batch_size": 64,
+  "epochs": 30,
+  "seeds": [
+    42,
+    123,
+    202
+  ],
+  "num_pseudo_labels": 17343,
+  "fusion_mode": "scalar",
+  "tta_windows": 3,
+  "seed_weights": {
+    "42": 0.3379172103577414,
+    "123": 0.3279526863738154,
+    "202": 0.3341301032684431
+  },
+  "scalar_neural_label_weight": 0.6422745712268169,
+  "scalar_tree_label_weight": 0.35772542877318314,
+  "scalar_neural_cwe_weight": 0.6984804835893771,
+  "scalar_tree_cwe_weight": 0.3015195164106229,
+  "fusion_threshold": 0.4483333333333337,
+  "seed_results": {
+    "42": {
+      "scalar_label_f1": 0.9802061479522028,
+      "scalar_cwe_macro": 0.933171981399058,
+      "scalar_threshold": 0.3950000000000003,
+      "scalar_neural_label_weight": 0.775,
+      "scalar_tree_label_weight": 0.22499999999999998,
+      "scalar_neural_cwe_weight": 0.625,
+      "scalar_tree_cwe_weight": 0.375,
+      "neural_label_f1": 0.9795171909290417,
+      "neural_cwe_macro": 0.9214118506874739
+    },
+    "123": {
+      "scalar_label_f1": 0.980799265043638,
+      "scalar_cwe_macro": 0.9056545472324626,
+      "scalar_threshold": 0.45000000000000034,
+      "scalar_neural_label_weight": 0.625,
+      "scalar_tree_label_weight": 0.375,
+      "scalar_neural_cwe_weight": 0.9,
+      "scalar_tree_cwe_weight": 0.09999999999999998,
+      "neural_label_f1": 0.979418550992155,
+      "neural_cwe_macro": 0.9043425687760407
+    },
+    "202": {
+      "scalar_label_f1": 0.9845417740154582,
+      "scalar_cwe_macro": 0.9227137326979943,
+      "scalar_threshold": 0.5000000000000003,
+      "scalar_neural_label_weight": 0.525,
+      "scalar_tree_label_weight": 0.475,
+      "scalar_neural_cwe_weight": 0.5750000000000001,
+      "scalar_tree_cwe_weight": 0.42499999999999993,
+      "neural_label_f1": 0.9829634404641311,
+      "neural_cwe_macro": 0.9174711262305976
+    }
+  },
+  "avg_scalar_cwe_macro": 0.9205134204431716,
+  "cwe_loss_weight": 2.0,
+  "focal_gamma": 1.5,
+  "gbdt_backend": "lightgbm"
+}

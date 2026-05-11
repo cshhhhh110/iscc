@@ -1,0 +1,70 @@
+{
+  "model_version": "v1.5",
+  "device": "cuda",
+  "byte_length": 8192,
+  "batch_size": 64,
+  "epochs": 25,
+  "seeds": [
+    42,
+    123,
+    456
+  ],
+  "num_pseudo_labels": 17343,
+  "fusion_mode": "scalar",
+  "tta_windows": 3,
+  "scalar_neural_label_weight": 0.5916666666666667,
+  "scalar_tree_label_weight": 0.4083333333333333,
+  "scalar_neural_cwe_weight": 0.55,
+  "scalar_tree_cwe_weight": 0.44999999999999996,
+  "fusion_threshold": 0.4383333333333337,
+  "seed_results": {
+    "42": {
+      "scalar_label_f1": 0.9769492148039306,
+      "scalar_cwe_macro": 0.928127687459382,
+      "scalar_threshold": 0.5800000000000004,
+      "scalar_neural_label_weight": 0.55,
+      "scalar_tree_label_weight": 0.44999999999999996,
+      "scalar_neural_cwe_weight": 0.525,
+      "scalar_tree_cwe_weight": 0.475,
+      "mlp_label_f1": 1.0,
+      "mlp_cwe_macro": 0.6892115132342448,
+      "mlp_threshold": 0.08,
+      "neural_label_f1": 0.9743354720439963,
+      "neural_cwe_macro": 0.9068350110568971
+    },
+    "123": {
+      "scalar_label_f1": 0.9782189137027847,
+      "scalar_cwe_macro": 0.8930600828418837,
+      "scalar_threshold": 0.4050000000000003,
+      "scalar_neural_label_weight": 0.5750000000000001,
+      "scalar_tree_label_weight": 0.42499999999999993,
+      "scalar_neural_cwe_weight": 0.5750000000000001,
+      "scalar_tree_cwe_weight": 0.42499999999999993,
+      "mlp_label_f1": 0.999552171965965,
+      "mlp_cwe_macro": 0.741739323176064,
+      "mlp_threshold": 0.3150000000000002,
+      "neural_label_f1": 0.9769956924204931,
+      "neural_cwe_macro": 0.8697151655948938
+    },
+    "456": {
+      "scalar_label_f1": 0.9811598198694973,
+      "scalar_cwe_macro": 0.8728111924536754,
+      "scalar_threshold": 0.33000000000000024,
+      "scalar_neural_label_weight": 0.65,
+      "scalar_tree_label_weight": 0.35,
+      "scalar_neural_cwe_weight": 0.55,
+      "scalar_tree_cwe_weight": 0.44999999999999996,
+      "mlp_label_f1": 0.9990974729241877,
+      "mlp_cwe_macro": 0.7269616462216596,
+      "mlp_threshold": 0.4150000000000003,
+      "neural_label_f1": 0.9793179520176487,
+      "neural_cwe_macro": 0.8489129828353252
+    }
+  },
+  "avg_scalar_cwe_macro": 0.8979996542516471,
+  "avg_mlp_cwe_macro": 0.7193041608773227,
+  "cwe_loss_weight": 2.0,
+  "focal_gamma": 1.5,
+  "byte_embedding_dim": 48,
+  "gbdt_backend": "lightgbm"
+}

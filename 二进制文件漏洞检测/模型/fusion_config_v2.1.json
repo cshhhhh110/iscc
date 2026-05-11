@@ -1,0 +1,77 @@
+{
+  "model_version": "v2.1",
+  "device": "cuda",
+  "byte_length": 8192,
+  "batch_size": 64,
+  "epochs": 30,
+  "seeds": [
+    42,
+    123,
+    789,
+    202
+  ],
+  "num_pseudo_labels": 17343,
+  "fusion_mode": "scalar",
+  "tta_windows": 3,
+  "seed_weights": {
+    "42": 0.25320798280584733,
+    "123": 0.247659274765359,
+    "789": 0.24499469825842446,
+    "202": 0.25413804417036917
+  },
+  "scalar_neural_label_weight": 0.5439417469562128,
+  "scalar_tree_label_weight": 0.4560582530437872,
+  "scalar_neural_cwe_weight": 0.6062324960616947,
+  "scalar_tree_cwe_weight": 0.3937675039383053,
+  "fusion_threshold": 0.4925000000000004,
+  "seed_results": {
+    "42": {
+      "scalar_label_f1": 0.9768000739439874,
+      "scalar_cwe_macro": 0.9110041211202736,
+      "scalar_threshold": 0.5250000000000004,
+      "scalar_neural_label_weight": 0.55,
+      "scalar_tree_label_weight": 0.44999999999999996,
+      "scalar_neural_cwe_weight": 0.525,
+      "scalar_tree_cwe_weight": 0.475,
+      "neural_label_f1": 0.9761161124379938,
+      "neural_cwe_macro": 0.8992884039926846
+    },
+    "123": {
+      "scalar_label_f1": 0.9790004585052728,
+      "scalar_cwe_macro": 0.8910407067138091,
+      "scalar_threshold": 0.46500000000000036,
+      "scalar_neural_label_weight": 0.5750000000000001,
+      "scalar_tree_label_weight": 0.42499999999999993,
+      "scalar_neural_cwe_weight": 0.7000000000000001,
+      "scalar_tree_cwe_weight": 0.29999999999999993,
+      "neural_label_f1": 0.977299880525687,
+      "neural_cwe_macro": 0.8791557229400692
+    },
+    "789": {
+      "scalar_label_f1": 0.9768892149669846,
+      "scalar_cwe_macro": 0.8814539624415366,
+      "scalar_threshold": 0.4900000000000004,
+      "scalar_neural_label_weight": 0.5,
+      "scalar_tree_label_weight": 0.5,
+      "scalar_neural_cwe_weight": 0.55,
+      "scalar_tree_cwe_weight": 0.44999999999999996,
+      "neural_label_f1": 0.9755739210284665,
+      "neural_cwe_macro": 0.8673070148736349
+    },
+    "202": {
+      "scalar_label_f1": 0.9810039460401946,
+      "scalar_cwe_macro": 0.9143503415932033,
+      "scalar_threshold": 0.4900000000000004,
+      "scalar_neural_label_weight": 0.55,
+      "scalar_tree_label_weight": 0.44999999999999996,
+      "scalar_neural_cwe_weight": 0.65,
+      "scalar_tree_cwe_weight": 0.35,
+      "neural_label_f1": 0.9789231477220433,
+      "neural_cwe_macro": 0.9035317464588127
+    }
+  },
+  "avg_scalar_cwe_macro": 0.8994622829672057,
+  "cwe_loss_weight": 2.0,
+  "focal_gamma": 1.5,
+  "gbdt_backend": "lightgbm"
+}
