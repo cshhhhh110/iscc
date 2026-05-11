@@ -27,3 +27,18 @@
 | 网络安全智能分类挑战 | `网络安全智能分类挑战/` |
 
 每个子项目有独立的 `ACTION_LOG.md` 和 `README.md`，进入前先读。
+
+## 版本管理（由 Claude 全权负责）
+
+- 版本号递增、归档、产物命名、git commit/push 均由 Claude 执行。
+- 每次训练产出新版本后，自动：归档到版本记录 → 更新项目日志 → 更新总日志 → git commit + push。
+- 提交消息格式：`项目名 vX.Y: 关键改动`（如 `二进制 v2.1: self-attention + 稀有CWE增强`）。
+- README 中版本号和成绩表随版本更新同步维护。
+- 用户只负责训练和告知平台成绩，其余管理动作不需操心。
+
+## Git 仓库
+
+- 地址：`https://github.com/cshhhhh110/iscc`
+- 认证：SSH（`git@github.com:cshhhhh110/iscc.git`）
+- 忽略规则：`.pt`、`.joblib`、`.npy`、`.cbm`、`.pkl`、`binaries/`、`docker容器/`、大CSV、`catboost_info/`、`.claude/`
+- 操作手册：`ISCC操作手册.md`
