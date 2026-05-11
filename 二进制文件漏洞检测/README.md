@@ -40,12 +40,17 @@ Versioned model artifacts (v1.4):
 | v1.5    | 0.8980 (avg 3-seed)      | **0.923**                    |
 | v1.6    | 0.9247 (avg 4-seed)      | 0.904 ❌（伪标签噪声反噬）     |
 | v1.7    | 0.8862 (avg 4-seed)      | 0.876 ❌（逐CWE阈值过度降级）  |
-| v1.8    | —                        | 🔧 待训练                    |
+| v1.8    | 0.8883                   | 0.911                        |
+| v1.9    | 0.8953                   | 0.921                        |
+| v2.0    | 0.9070                   | 0.916                        |
+| v2.1    | 0.8995                   | 0.912                        |
+| v2.2    | 0.9127                   | 0.910                        |
+| v2.3    | 0.9166                   | 0.92266                      |
+| v2.4    | **0.9205**               | **0.925** 🏆                 |
 
-v1.5: pseudo-labeling (17,343 samples, thresh=0.9) + 3-seed ensemble + TTA + scalar fusion.
-v1.6: pseudo-labeling (28,216 samples, thresh=0.7) + 4-seed heterogeneous ensemble + TTA. Local↑ but platform↓: low-confidence pseudo-labels introduced CWE noise.
-v1.7: same pseudo-labels as v1.5 + 4-seed heterogeneous + weighted ensemble + per-CWE thresholds. Per-CWE thresholds demoted 1,387 label=1 predictions, crushing recall.
-v1.8: rollback per-CWE thresholds, epochs 20→25. Same backbone as v1.7 otherwise.
+v1.5: pseudo-labeling + 3-seed + TTA + scalar fusion. Platform 0.923 — held for 9 versions.
+v2.3: Capstone disasm (opcodes + bigrams), 3-seed [42,123,202], 638-dim features.
+v2.4: Extended Capstone (registers + function boundaries + operands + instr length), 674-dim. **New record.**
 
 Platform scoring: Macro-F1 over 87 classes (1 "no vuln" label=0 + 86 CWE classes).
 Reference: `D:\桌面\题解\二进制\二进制漏洞检测竞赛完整说明文档.pdf`
