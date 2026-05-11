@@ -58,3 +58,8 @@ catboost_info/
 *.log
 smoke_*
 ~*
+
+# === 网络安全分类大CSV ===
+网络安全智能分类挑战/train_data.csv
+网络安全智能分类挑战/test_data.csv
+网络安全智能分类挑战/sample_submission.csv
