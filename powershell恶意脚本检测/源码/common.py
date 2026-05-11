@@ -372,7 +372,7 @@ def _augment_X_for_bundle(bundle: Mapping[str, object], X: pd.DataFrame | np.nda
 
     if encoder is None and interaction_specs is None and kmeans_model is None:
         if isinstance(X, pd.DataFrame):
-            X = X.to_numpy(dtype=np.int64, copy=True)
+            X = X[feature_cols].to_numpy(dtype=np.int64, copy=True)
         return np.asarray(X, dtype=np.int64)
 
     if isinstance(X, np.ndarray):

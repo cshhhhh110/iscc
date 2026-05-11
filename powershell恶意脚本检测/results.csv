@@ -1,2 +1,4 @@
 version,timestamp,device,folds,interactions,kmeans,smote,loss_type,selected,oof_macro_f1,train_minutes,cand_catboost,cand_dcn,cand_fusion,cand_lgb,cand_pattern_lookup,cand_tab_resnet,cand_tree,cand_xgboost
 v1.7,2026-05-11 15:29:48,cuda,5,False,False,False,soft_ce,fusion,0.75535,90.2,0.750984,0.753629,0.75535,0.750591,0.752879,0.754298,0.752952,0.75123
+v1.8,2026-05-11 20:44:32,cpu,2,False,False,False,soft_ce,tree,0.75194,5.1,,,,,,,0.75194,
+v1.8,2026-05-12 06:27:34,cpu,2,False,False,False,soft_ce,tree,0.75194,3.1,,,,,,,0.75194,

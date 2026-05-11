@@ -41,3 +41,5 @@
 - 2026-05-11 13:56:42 validated PowerShell submission: rows=20000, label_counts={0: 12625, 1: 3341, 2: 4034}
 - 2026-05-11 15:29:48 trained v1.7 PowerShell models; selected=fusion; oof_macro_f1=0.755350; device=cuda; bundle=E:\赛题数据\powershell恶意脚本检测\模型\model_bundle_v1.7.joblib
 - 2026-05-11 15:30:04 generated PowerShell submission with 20000 rows: E:\赛题数据\powershell恶意脚本检测\提交结果\submission_v1.7.csv
+- 2026-05-12 04:05:23 generated PowerShell submission with 20000 rows: E:\赛题数据\powershell恶意脚本检测\提交结果\submission_v1.8.csv
+- 2026-05-12 04:05:24 validated PowerShell submission: rows=20000, label_counts={0: 12728, 1: 3386, 2: 3886}

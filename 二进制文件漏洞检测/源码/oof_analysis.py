@@ -34,19 +34,22 @@ from train import (
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / "模型"
 TRAIN_CSV = ROOT / "train.csv"
+PSEUDO_CSV = ROOT / "pseudo_train_v2.5.csv"
 OUTPUT_REPORT = MODEL_DIR.resolve() / "oof_report_v2.5.json"
 TRAIN_ROWS = read_csv_rows(TRAIN_CSV)
+PSEUDO_ROWS = read_csv_rows(PSEUDO_CSV) if PSEUDO_CSV.exists() else []
+ALL_ROWS = TRAIN_ROWS + PSEUDO_ROWS
 
 
 def _build_data():
-    """Load or build cached training features."""
-    tab_cache = _load_or_build_tabular_cache(TRAIN_ROWS)
+    """Load or build cached training features (train + pseudo to match cache)."""
+    tab_cache = _load_or_build_tabular_cache(ALL_ROWS)
     X = np.asarray(tab_cache["X"], dtype=np.float32)
     y_label = np.asarray(tab_cache["y_label"], dtype=np.int32)
     cwe_ids_list = list(tab_cache["cwe_ids"])
     feature_cols = list(tab_cache.get("feature_columns", get_feature_columns()))
 
-    byte_cache = _load_or_build_byte_cache(TRAIN_ROWS, DEFAULT_BYTE_LENGTH)
+    byte_cache = _load_or_build_byte_cache(ALL_ROWS, DEFAULT_BYTE_LENGTH)
     X_byte = np.asarray(byte_cache["X_byte"], dtype=np.uint8)
 
     # CWE mapping from training labels only (same as train.py)
@@ -91,7 +94,12 @@ def run_oof():
     print("Loading data...")
     X, X_byte, y_label, y_cwe, cwe_ids_list, cwe_classes, cwe_mapping, feature_cols = _build_data()
 
-    fusion_config = json.load(open(MODEL_DIR.resolve() / FUSION_CONFIG_NAME))
+    # Find latest trained fusion config (v2.5 not trained yet, use v2.4)
+    config_path = MODEL_DIR.resolve() / FUSION_CONFIG_NAME
+    if not config_path.exists():
+        config_path = MODEL_DIR.resolve() / "fusion_config_v2.4.json"
+    fusion_config = json.load(open(config_path))
+    print(f"Using config: {config_path.name}")
     seeds = fusion_config.get("seeds", [42, 123, 202])
     num_cwe = len(cwe_classes)
 
@@ -115,6 +123,8 @@ def run_oof():
 
         # Neural OOF (model was trained on train_idx only)
         nb_path = MODEL_DIR.resolve() / seed_neural_bundle(seed)
+        if not nb_path.exists():
+            nb_path = MODEL_DIR.resolve() / f"neural_bundle_v2.4_seed{seed}.pt"
         nb = torch.load(nb_path, map_location=DEVICE, weights_only=False)
         neural_model = ByteMetaMultiTaskNet(**nb["model_config"]).to(DEVICE)
         neural_model.load_state_dict(nb["state_dict"])
@@ -130,7 +140,7 @@ def run_oof():
         print(f"  neural done: label_pos={neural_lp.mean():.3f}")
 
         # Collect
-        val_binary_ids = [TRAIN_ROWS[i]["binary_id"] for i in val_idx]
+        val_binary_ids = [ALL_ROWS[i]["binary_id"] for i in val_idx]
         all_binary_ids.extend(val_binary_ids)
         all_val_y_label.append(y_label[val_idx])
         all_val_y_cwe.append(y_cwe[val_idx])

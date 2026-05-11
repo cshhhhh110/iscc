@@ -127,3 +127,9 @@
 
 [2026-05-11 20:24:17] v1.4 BiLSTM v2: platform 0.885 (+0.056 from v1.3 0.829). SVD 524K→300dim + BiLSTM 2×256 + argmax decoder. OOF 0.9565.
 [2026-05-11 20:24:17] Archived v1.4 to 版本记录/v1.4/ (源码, 模型, 提交结果).
+[2026-05-11 22:12:14] Training started (BiLSTM v3 boundary).
+[2026-05-11 22:24:53] NNv3 Fold 1: best_epoch=12, val_score=0.946037.
+[2026-05-11 22:35:29] NNv3 Fold 2: best_epoch=9, val_score=0.939355.
+[2026-05-11 22:49:13] NNv3 Fold 3: best_epoch=13, val_score=0.953989.
+[2026-05-11 23:22:11] NNv3 Fold 4: best_epoch=14, val_score=0.955976.
+[2026-05-12 00:02:22] NNv3 Fold 5: best_epoch=17, val_score=0.956410.
