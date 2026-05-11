@@ -1,0 +1,25 @@
+{
+  "source": "gpu_sklearn_blend",
+  "gpu_probs_path": "D:\\桌面\\赛题数据\\网络安全智能分类挑战\\模型\\gpu_test_probs.npy",
+  "sklearn_source": "computed from D:\\桌面\\赛题数据\\网络安全智能分类挑战\\模型\\model_bundle.joblib",
+  "output_path": "D:\\桌面\\赛题数据\\网络安全智能分类挑战\\提交结果\\submission_blend.csv",
+  "rows": 19440,
+  "label_names": [
+    "class_0",
+    "class_1",
+    "class_10",
+    "class_11",
+    "class_2",
+    "class_3",
+    "class_4",
+    "class_5",
+    "class_6",
+    "class_7",
+    "class_8",
+    "class_9"
+  ],
+  "weights": {
+    "gpu": 0.6,
+    "sklearn": 0.4
+  }
+}

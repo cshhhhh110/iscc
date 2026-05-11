@@ -1,0 +1,16 @@
+﻿name: iscc-ml
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - numpy
+      - scipy
+      - pandas
+      - scikit-learn
+      - joblib
+      - tqdm
+      - pefile
+      - lief
+      - torch

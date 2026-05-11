@@ -1,0 +1,20 @@
+{
+  "model_version": "v1.3",
+  "device": "cuda",
+  "byte_length": 8192,
+  "batch_size": 64,
+  "epochs": 10,
+  "tree_threshold": 0.5000000000000003,
+  "fusion_threshold": 0.44000000000000034,
+  "tree_label_weight": 0.6,
+  "neural_label_weight": 0.4,
+  "tree_cwe_weight": 0.725,
+  "neural_cwe_weight": 0.275,
+  "neural_label_f1": 0.9463969658659924,
+  "neural_cwe_macro_f1": 0.7771067049230902,
+  "fused_label_f1": 0.9574414505162427,
+  "fused_cwe_macro_f1": 0.8299069927175452,
+  "cwe_loss_weight": 1.25,
+  "byte_embedding_dim": 24,
+  "patience": 3
+}

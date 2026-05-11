@@ -1,0 +1,43 @@
+# ACTION_LOG
+
+- 2026-05-04 初始化 PowerShell 恶意脚本检测项目结构，确认任务为 15 个离散数值特征的三分类，指标为 Macro-F1。
+- 2026-05-04 升级为自动选型 baseline：ExtraTrees、HistGradientBoosting 与二者融合按 OOF Macro-F1 选最优。
+- 2026-05-04 23:53:03 trained PowerShell baseline; selected=blend; oof_macro_f1=0.753027; model=D:\桌面\赛题数据\powershell恶意脚本检测\模型\model_bundle.joblib
+- 2026-05-04 23:53:24 generated PowerShell submission with 20000 rows: D:\桌面\赛题数据\powershell恶意脚本检测\提交结果\submission.csv
+- 2026-05-05 00:58:50 trained PowerShell baseline; selected=blend; oof_macro_f1=0.753027; model=D:\桌面\赛题数据\powershell恶意脚本检测\模型\model_bundle.joblib
+- 2026-05-05 13:32:52 trained PowerShell baseline; selected=blend; class_bias=[1.0, 0.925, 1.4]; oof_macro_f1=0.755080; model=D:\桌面\赛题数据\powershell恶意脚本检测\模型\model_bundle.joblib
+- 2026-05-05 13:32:59 generated PowerShell submission with 20000 rows: D:\桌面\赛题数据\powershell恶意脚本检测\提交结果\submission.csv; class_bias=[1.0, 0.925, 1.4]
+- 2026-05-05 13:33:00 validated PowerShell submission: rows=20000, label_counts={0: 12729, 1: 3347, 2: 3924}
+- 2026-05-05 22:22:51 generated PowerShell submission with 20000 rows: _smoke_v1_1_submission.csv; class_bias=[1.0, 1.0, 1.0]
+- 2026-05-05 22:23:12 validated PowerShell submission: rows=20000, label_counts={0: 15696, 1: 366, 2: 3938}
+- 2026-05-05 22:32:56 v1.1 deep tabular rebuild source implemented; CUDA smoke train/predict/validate passed with mlp, 2 folds, 1 epoch; snapshot archived under 版本记录/v1.1/ with source, current model, current submission, and smoke artifacts.
+- 2026-05-05 22:35:37 added legacy blend-bundle compatibility and silenced loky core warnings; smoke-tested the current official tree bundle with predict/validate.
+- 2026-05-05 22:40:31 made total-log writes best-effort so training will not fail if the outer log path is unavailable.
+- 2026-05-05 23:03:56 default artifact filenames updated to versioned names: model_bundle_v1.1.joblib, validation_report_v1.1.json, and submission_v1.1.csv.
+- 2026-05-05 23:03:56 created versioned artifact copies in 模型/ and 提交结果/ and synced the v1.1 snapshot to the same versioned filenames.
+- 2026-05-05 23:25:55 trained v1.1 PowerShell models; selected=tree; oof_macro_f1=0.755256; device=cuda; bundle=D:\桌面\赛题数据\powershell恶意脚本检测\模型\model_bundle_v1.1.joblib
+- 2026-05-05 23:30:59 generated PowerShell submission with 20000 rows: D:\桌面\赛题数据\powershell恶意脚本检测\提交结果\submission_v1.1.csv
+- 2026-05-07 01:22:03 v1.2 versioning applied: active artifacts are model_bundle_v1.2.joblib, validation_report_v1.2.json, and submission_v1.2.csv; OOF Macro-F1=0.755080; snapshot archived under 版本记录/v1.2/.
+- 2026-05-07 01:25:51 generated PowerShell submission with 20000 rows: D:\桌面\赛题数据\powershell恶意脚本检测\提交结果\submission_v1.2.csv
+- 2026-05-07 01:25:53 validated PowerShell submission: rows=20000, label_counts={0: 12729, 1: 3347, 2: 3924}
+- 2026-05-07 01:53:11 generated PowerShell submission with 20000 rows: D:\桌面\赛题数据\powershell恶意脚本检测\提交结果\submission_v1.2.csv
+- 2026-05-07 01:53:20 validated PowerShell submission: rows=20000, label_counts={0: 12729, 1: 3347, 2: 3924}
+- 2026-05-07 02:27:03 v1.3 source upgrade completed: added pattern_lookup candidate, extended fusion to 4-way simplex weights, bumped active defaults to v1.3, and smoke-tested the new lookup path; full GPU training remains for the user.
+- 2026-05-07 17:08:27 trained v1.3 PowerShell models; selected=fusion; oof_macro_f1=0.755433; device=cuda; bundle=E:\赛题数据\powershell恶意脚本检测\模型\model_bundle_v1.3.joblib
+- 2026-05-07 17:28:34 generated PowerShell submission with 20000 rows: E:\赛题数据\powershell恶意脚本检测\提交结果\submission_v1.3.csv
+- 2026-05-07 17:35:42 validated PowerShell submission: rows=20000, label_counts={0: 12578, 1: 3356, 2: 4066}
+- 2026-05-07 20:42:54 trained v1.4 PowerShell models; selected=fusion; oof_macro_f1=0.755713; device=cuda; bundle=E:\赛题数据\powershell恶意脚本检测\模型\model_bundle_v1.4.joblib
+- 2026-05-07 20:44:34 generated PowerShell submission with 20000 rows: E:\赛题数据\powershell恶意脚本检测\提交结果\submission_v1.4.csv
+- 2026-05-07 20:44:48 validated PowerShell submission: rows=20000, label_counts={0: 12623, 1: 3330, 2: 4047}
+- 2026-05-07 22:34:15 trained v1.5 PowerShell models; selected=fusion; oof_macro_f1=0.755537; device=cuda; bundle=E:\赛题数据\powershell恶意脚本检测\模型\model_bundle_v1.5.joblib
+- 2026-05-10 22:31:05 trained v1.6 PowerShell models; selected=fusion; oof_macro_f1=0.755472; device=cuda; bundle=E:\赛题数据\powershell恶意脚本检测\模型\model_bundle_v1.6.joblib
+- 2026-05-10 23:16:59 generated PowerShell submission with 20000 rows: E:\赛题数据\powershell恶意脚本检测\提交结果\submission_v1.6.csv
+- 2026-05-10 23:41:51 validated PowerShell submission: rows=20000, label_counts={0: 12660, 1: 3337, 2: 4003}
+- 2026-05-10 23:49:59 generated PowerShell submission with 20000 rows: 提交结果\submission_v1.5.csv
+- 2026-05-10 23:50:08 validated PowerShell submission: rows=20000, label_counts={0: 12625, 1: 3341, 2: 4034}
+- 2026-05-11 12:10:19 generated PowerShell submission with 20000 rows: E:\赛题数据\powershell恶意脚本检测\提交结果\submission_v1.7.csv
+- 2026-05-11 13:48:27 trained v1.7 PowerShell models; selected=fusion; oof_macro_f1=0.755537; device=cuda; bundle=E:\赛题数据\powershell恶意脚本检测\模型\model_bundle_v1.7.joblib
+- 2026-05-11 13:56:31 generated PowerShell submission with 20000 rows: E:\赛题数据\powershell恶意脚本检测\提交结果\submission_v1.7.csv
+- 2026-05-11 13:56:42 validated PowerShell submission: rows=20000, label_counts={0: 12625, 1: 3341, 2: 4034}
+- 2026-05-11 15:29:48 trained v1.7 PowerShell models; selected=fusion; oof_macro_f1=0.755350; device=cuda; bundle=E:\赛题数据\powershell恶意脚本检测\模型\model_bundle_v1.7.joblib
+- 2026-05-11 15:30:04 generated PowerShell submission with 20000 rows: E:\赛题数据\powershell恶意脚本检测\提交结果\submission_v1.7.csv

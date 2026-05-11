@@ -1,0 +1,64 @@
+{
+  "model_version": "v2.3",
+  "device": "cuda",
+  "byte_length": 8192,
+  "batch_size": 64,
+  "epochs": 30,
+  "seeds": [
+    42,
+    123,
+    202
+  ],
+  "num_pseudo_labels": 17343,
+  "fusion_mode": "scalar",
+  "tta_windows": 3,
+  "seed_weights": {
+    "42": 0.33987946357221094,
+    "123": 0.32618051061884895,
+    "202": 0.3339400258089401
+  },
+  "scalar_neural_label_weight": 0.5985391008333228,
+  "scalar_tree_label_weight": 0.40146089916667715,
+  "scalar_neural_cwe_weight": 0.516697001290447,
+  "scalar_tree_cwe_weight": 0.48330299870955296,
+  "fusion_threshold": 0.44333333333333363,
+  "seed_results": {
+    "42": {
+      "scalar_label_f1": 0.9798239178283199,
+      "scalar_cwe_macro": 0.9345528507264431,
+      "scalar_threshold": 0.44500000000000034,
+      "scalar_neural_label_weight": 0.55,
+      "scalar_tree_label_weight": 0.44999999999999996,
+      "scalar_neural_cwe_weight": 0.5,
+      "scalar_tree_cwe_weight": 0.5,
+      "neural_label_f1": 0.978003696857671,
+      "neural_cwe_macro": 0.9301214305307266
+    },
+    "123": {
+      "scalar_label_f1": 0.9815815999266929,
+      "scalar_cwe_macro": 0.8968853923870196,
+      "scalar_threshold": 0.3950000000000003,
+      "scalar_neural_label_weight": 0.75,
+      "scalar_tree_label_weight": 0.25,
+      "scalar_neural_cwe_weight": 0.5,
+      "scalar_tree_cwe_weight": 0.5,
+      "neural_label_f1": 0.9812947001650467,
+      "neural_cwe_macro": 0.8788880458651445
+    },
+    "202": {
+      "scalar_label_f1": 0.9844654839599228,
+      "scalar_cwe_macro": 0.9182214182973175,
+      "scalar_threshold": 0.4900000000000004,
+      "scalar_neural_label_weight": 0.5,
+      "scalar_tree_label_weight": 0.5,
+      "scalar_neural_cwe_weight": 0.55,
+      "scalar_tree_cwe_weight": 0.44999999999999996,
+      "neural_label_f1": 0.9836971539099199,
+      "neural_cwe_macro": 0.9066669507176387
+    }
+  },
+  "avg_scalar_cwe_macro": 0.9165532204702601,
+  "cwe_loss_weight": 2.0,
+  "focal_gamma": 1.5,
+  "gbdt_backend": "lightgbm"
+}

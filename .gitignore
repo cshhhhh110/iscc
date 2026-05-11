@@ -1,0 +1,57 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# === Conda / Virtual Env ===
+venv/
+.venv/
+env/
+*.conda/
+conda/
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === OS ===
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# === 模型二进制文件 (过大，GitHub 100MB限制) ===
+*.pt
+*.joblib
+*.pkl
+*.npy
+*.cbm
+*.7z
+*.zip
+*.rar
+
+# === 原始数据 ===
+**/binaries/
+**/docker容器/
+
+# === 大 CSV 数据文件 (超过50MB) ===
+系统日志异常检测挑战/train.csv
+系统日志异常检测挑战/test.csv
+系统日志异常检测挑战/pseudo_train.csv
+
+# === Docker ===
+docker容器/
+
+# === CatBoost 训练信息 ===
+catboost_info/
+
+# === Claude Code 配置 ===
+.claude/
+
+# === 临时/日志文件 ===
+*.log
+smoke_*
+~*
