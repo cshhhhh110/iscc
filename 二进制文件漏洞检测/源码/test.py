@@ -1,4 +1,4 @@
-"""Prediction entrypoint for v2.4: weighted ensemble + scalar fusion + TTA."""
+"""Prediction entrypoint for v2.5: weighted ensemble + scalar fusion + per-class weights + TTA."""
 
 from __future__ import annotations
 
@@ -150,7 +150,7 @@ def main():
     use_tta = int(fusion_config.get("tta_windows", 0)) > 1
     tta_windows = int(fusion_config.get("tta_windows", 3))
 
-    print(f"v2.4 prediction: fusion_mode={fusion_mode}, seeds={seeds}, tta={use_tta}({tta_windows} windows)")
+    print(f"v2.5 prediction: fusion_mode={fusion_mode}, seeds={seeds}, tta={use_tta}({tta_windows} windows)")
     print(f"device={DEVICE}, byte_length={byte_length}, batch_size={batch_size}")
 
     rows = read_csv_rows(TEST_CSV)
@@ -232,8 +232,21 @@ def main():
     print(f"\nUsing scalar fusion (weighted ensemble, {len(seeds)} seeds)")
     label_probs = (float(fusion_config["scalar_neural_label_weight"]) * avg_neural_label +
                    float(fusion_config["scalar_tree_label_weight"]) * avg_tree_label)
-    cwe_probs = (float(fusion_config["scalar_neural_cwe_weight"]) * avg_neural_cwe +
-                 float(fusion_config["scalar_tree_cwe_weight"]) * avg_tree_cwe)
+
+    # Per-class CWE fusion weights (v2.5), fall back to global
+    global_nw_cwe = float(fusion_config["scalar_neural_cwe_weight"])
+    per_class_w = fusion_config.get("per_class_cwe_weights", {})
+    if per_class_w:
+        cwe_probs = np.zeros_like(avg_neural_cwe)
+        for c in range(len(cwe_classes)):
+            w = float(per_class_w.get(str(c), global_nw_cwe))
+            w = max(0.0, min(1.0, w))  # clamp
+            cwe_probs[:, c] = w * avg_neural_cwe[:, c] + (1.0 - w) * avg_tree_cwe[:, c]
+        print(f"  per-class CWE fusion: {len(per_class_w)} classes, weights range [{min(per_class_w.values()):.3f}, {max(per_class_w.values()):.3f}]")
+    else:
+        cwe_probs = (global_nw_cwe * avg_neural_cwe +
+                     float(fusion_config["scalar_tree_cwe_weight"]) * avg_tree_cwe)
+
     fusion_threshold = float(fusion_config.get("fusion_threshold", 0.5))
 
     # Generate submission
