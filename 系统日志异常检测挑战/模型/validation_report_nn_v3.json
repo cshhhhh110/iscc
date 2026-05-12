@@ -1,0 +1,140 @@
+{
+  "version": 5,
+  "model": "BiLSTM_v3_boundary",
+  "train_rows": 20000,
+  "test_rows": 5000,
+  "folds": 5,
+  "epochs": 30,
+  "input_dim": 300,
+  "hidden_dim": 256,
+  "final_epochs": 12,
+  "best_epochs": [
+    16,
+    9,
+    11,
+    20,
+    12
+  ],
+  "oof_metrics_default": {
+    "score": 0.9509424229696584,
+    "f1_detect": 1.0,
+    "iou_loc": 0.931896435382044,
+    "f1_type": 0.9571263007961038,
+    "eligible_anomaly_rows": 11361
+  },
+  "oof_metrics_tuned": {
+    "score": 0.9509998079577447,
+    "f1_detect": 1.0,
+    "iou_loc": 0.932337515490407,
+    "f1_type": 0.9566601434644035,
+    "eligible_anomaly_rows": 11361
+  },
+  "thresholds": {
+    "start_threshold": 0.3223977432093176,
+    "end_threshold": 0.6597646161981072,
+    "min_span_len": 3,
+    "max_span_len": 10,
+    "max_spans": 1,
+    "doc_threshold": 0.4864225121946524,
+    "type_span_lengths": {
+      "timeout_retry": {
+        "min_len": 4,
+        "target_len": 6,
+        "max_len": 9
+      },
+      "resource_exhaustion": {
+        "min_len": 4,
+        "target_len": 6,
+        "max_len": 10
+      },
+      "slow_burn_warning": {
+        "min_len": 5,
+        "target_len": 7,
+        "max_len": 10
+      },
+      "state_conflict": {
+        "min_len": 4,
+        "target_len": 5,
+        "max_len": 8
+      },
+      "parameter_drift": {
+        "min_len": 4,
+        "target_len": 5,
+        "max_len": 8
+      },
+      "out_of_order": {
+        "min_len": 3,
+        "target_len": 4,
+        "max_len": 7
+      },
+      "missing_step": {
+        "min_len": 3,
+        "target_len": 4,
+        "max_len": 7
+      },
+      "duplicate_event": {
+        "min_len": 3,
+        "target_len": 4,
+        "max_len": 7
+      },
+      "cross_component_mismatch": {
+        "min_len": 4,
+        "target_len": 5,
+        "max_len": 8
+      },
+      "partial_recovery_loop": {
+        "min_len": 5,
+        "target_len": 6,
+        "max_len": 9
+      }
+    }
+  },
+  "fold_reports": [
+    {
+      "fold": 1,
+      "train_rows": 16000,
+      "valid_rows": 4000,
+      "best_epoch": 16,
+      "val_score": 0.947373
+    },
+    {
+      "fold": 2,
+      "train_rows": 16000,
+      "valid_rows": 4000,
+      "best_epoch": 9,
+      "val_score": 0.937835
+    },
+    {
+      "fold": 3,
+      "train_rows": 16000,
+      "valid_rows": 4000,
+      "best_epoch": 11,
+      "val_score": 0.957504
+    },
+    {
+      "fold": 4,
+      "train_rows": 16000,
+      "valid_rows": 4000,
+      "best_epoch": 20,
+      "val_score": 0.954221
+    },
+    {
+      "fold": 5,
+      "train_rows": 16000,
+      "valid_rows": 4000,
+      "best_epoch": 12,
+      "val_score": 0.950928
+    }
+  ],
+  "submission_validation": {
+    "rows": 5000,
+    "columns": [
+      "id",
+      "has_anomaly",
+      "primary_start_idx",
+      "primary_end_idx",
+      "primary_anomaly_type",
+      "all_spans"
+    ]
+  }
+}

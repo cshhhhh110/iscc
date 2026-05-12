@@ -133,3 +133,12 @@
 [2026-05-11 22:49:13] NNv3 Fold 3: best_epoch=13, val_score=0.953989.
 [2026-05-11 23:22:11] NNv3 Fold 4: best_epoch=14, val_score=0.955976.
 [2026-05-12 00:02:22] NNv3 Fold 5: best_epoch=17, val_score=0.956410.
+[2026-05-12 08:22:08] Training started for system log anomaly detection (v1.3 SGD).
+[2026-05-12 08:29:43] Training started (BiLSTM v3 boundary).
+[2026-05-12 08:46:22] NNv3 Fold 1: best_epoch=16, val_score=0.947373.
+[2026-05-12 08:59:04] NNv3 Fold 2: best_epoch=9, val_score=0.937835.
+[2026-05-12 09:13:46] NNv3 Fold 3: best_epoch=11, val_score=0.957504.
+[2026-05-12 09:35:08] NNv3 Fold 4: best_epoch=20, val_score=0.954221.
+[2026-05-12 09:49:59] NNv3 Fold 5: best_epoch=12, val_score=0.950928.
+[2026-05-12 09:51:01] NNv3 OOF default=0.950942, tuned=0.955284, final_epochs=12.
+[2026-05-12 10:00:38] NNv3 Training completed: model=E:\赛题数据\系统日志异常检测挑战\模型\model_bundle_nn_v3.joblib.

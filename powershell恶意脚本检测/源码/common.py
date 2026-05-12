@@ -450,6 +450,12 @@ def _predict_torch_ensemble_proba(bundle: Mapping[str, object], X: np.ndarray, d
     else:
         X = np.asarray(X, dtype=np.int64)
     fold_bundles = bundle.get("fold_models", [])
+    # clip to valid range per feature to avoid CUDA embedding OOB
+    if fold_bundles:
+        card = np.array(fold_bundles[0].get("cardinalities", []), dtype=np.int64)
+        if len(card) == X.shape[1]:
+            X = np.minimum(X, card - 1)
+            X = np.maximum(X, 0)
     return predict_torch_ensemble_proba(fold_bundles, X, device=device)
 
 

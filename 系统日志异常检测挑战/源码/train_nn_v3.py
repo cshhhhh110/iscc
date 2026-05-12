@@ -77,10 +77,10 @@ def _compute_weights(dense_train: list[dict]):
     return type_weights, start_pw, end_pw, doc_pw
 
 
-def train_epoch(model, loader, optimizer, scheduler, type_weights, start_pw, end_pw, doc_pw, device, grad_clip):
+def train_epoch(model, loader, optimizer, scheduler, type_weights, start_pw, end_pw, doc_pw, device, grad_clip, desc=""):
     model.train()
     total_loss, n = 0.0, 0
-    for batch in loader:
+    for batch in tqdm(loader, desc=desc, unit="batch", dynamic_ncols=True, leave=False):
         features = batch["features"].to(device); mask = batch["mask"].to(device)
         labels = batch["labels"].to(device); has_anom = batch["has_anomaly"].to(device)
         boundary_logits, type_logits, doc_logits = model(features, mask)
@@ -160,7 +160,7 @@ def re_decode_from_raw(raw_probs_list, thresholds):
     doc_thr = thresholds.get("doc_threshold", 0.5)
 
     results = []
-    for rp in all_raw_probs_list:
+    for rp in raw_probs_list:
         nv = rp["n_lines"]
         spans = decode_boundary_spans(
             rp["start_probs"], rp["end_probs"], rp["type_probs"],
@@ -323,7 +323,8 @@ def main() -> int:
 
         for epoch in range(1, args.epochs + 1):
             train_epoch(model, train_loader, optimizer, scheduler,
-                       type_weights, start_pw, end_pw, doc_pw, device, args.grad_clip)
+                       type_weights, start_pw, end_pw, doc_pw, device, args.grad_clip,
+                       desc=f"fold {fold_idx} epoch {epoch}")
             _, _, val_loss = predict_with_raw_probs(model, val_loader, device)
             if val_loss < best_val_loss - 1e-6:
                 best_val_loss = val_loss; best_epoch = epoch
@@ -336,6 +337,10 @@ def main() -> int:
         val_preds, val_raw, _ = predict_with_raw_probs(model, val_loader, device)
         for local_pos, global_idx in enumerate(va_idx):
             oof_raw[int(global_idx)] = val_raw[local_pos]
+
+        # Save checkpoint after each fold in case of crash
+        joblib.dump([p for p in oof_raw if p is not None], cache_dir / "oof_raw_checkpoint.joblib", compress=3)
+        joblib.dump({"fold_reports": fold_reports, "best_epochs": best_epochs}, cache_dir / "fold_checkpoint.joblib")
 
         val_docs = [train_docs[int(i)] for i in va_idx]
         val_pred_objs = [Prediction(**d) for d in val_preds]
@@ -375,7 +380,8 @@ def main() -> int:
     scheduler = CosineAnnealingLR(optimizer, T_max=final_epochs)
     for epoch in range(1, final_epochs + 1):
         loss = train_epoch(full_model, full_loader, optimizer, scheduler,
-                          type_weights, start_pw, end_pw, doc_pw, device, args.grad_clip)
+                          type_weights, start_pw, end_pw, doc_pw, device, args.grad_clip,
+                          desc=f"full epoch {epoch}")
         print(f"  Full epoch {epoch}/{final_epochs}: loss={loss:.6f}")
 
     # Predict test
