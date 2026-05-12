@@ -43,3 +43,8 @@
 - 2026-05-11 15:30:04 generated PowerShell submission with 20000 rows: E:\赛题数据\powershell恶意脚本检测\提交结果\submission_v1.7.csv
 - 2026-05-12 04:05:23 generated PowerShell submission with 20000 rows: E:\赛题数据\powershell恶意脚本检测\提交结果\submission_v1.8.csv
 - 2026-05-12 04:05:24 validated PowerShell submission: rows=20000, label_counts={0: 12728, 1: 3386, 2: 3886}
+- 2026-05-13 01:27:05 v1.9: SafeEmbedding OOB保护 + GPU加速(CatBoost/XGBoost/LGBM/NN batch) + teacher checkpoint; deployed to LAPTOP-K4UA7J1Q (RTX 4060 8GB)
+- 2026-05-13 01:34:14 trained v1.9 fusion+pseudo; oof=0.774921(student虚高); teacher_oof=0.755362; pseudo=6137@th=0.85; device=cuda
+- 2026-05-13 01:40:00 v1.9 fusion+pseudo platform=0.69150 (worse than v1.8 tree+pseudo 0.69779)
+- 2026-05-13 02:00:00 v1.9 AB test: fusion裸 platform=0.690, tree裸 platform=0.689
+- 2026-05-13 02:30:00 v1.10: 分class伪标签阈值(class 2降门槛0.05-0.20) + tree-only; 归档v1.9到版本记录/

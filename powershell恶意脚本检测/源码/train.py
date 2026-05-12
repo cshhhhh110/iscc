@@ -81,8 +81,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lgb-lr", type=float, default=0.05, help="LightGBM learning rate.")
     parser.add_argument("--dcn-max-epochs", type=int, default=90, help="DeepCrossNetwork max epochs.")
     parser.add_argument("--tab-resnet-max-epochs", type=int, default=90, help="TabResidualNet max epochs.")
-    parser.add_argument("--batch-size", type=int, default=1024, help="Training batch size.")
-    parser.add_argument("--eval-batch-size", type=int, default=2048, help="Validation batch size.")
+    parser.add_argument("--batch-size", type=int, default=4096, help="Training batch size.")
+    parser.add_argument("--eval-batch-size", type=int, default=8192, help="Validation batch size.")
     parser.add_argument("--patience", type=int, default=12, help="Early stopping patience.")
     parser.add_argument("--lr-dcn", type=float, default=1.8e-3, help="DeepCrossNetwork learning rate.")
     parser.add_argument("--lr-tab-resnet", type=float, default=1.5e-3, help="TabResidualNet learning rate.")
@@ -1057,6 +1057,7 @@ def _run_training_pass(
         fold_reports["pattern_lookup"] = pattern_fold_reports
         candidate_raw_bundles["pattern_lookup_selected"] = pattern_selected_bundle
 
+    gpu_gbdt = device.type == "cuda"
     if "catboost" in train_arches:
         cb_result, _ = train_sklearn_gbdt_cv(
             model_factory=lambda random_state: build_catboost_model(
@@ -1064,6 +1065,7 @@ def _run_training_pass(
                 iterations=args.cb_iter,
                 depth=args.cb_depth,
                 lr=args.cb_lr,
+                gpu=gpu_gbdt,
             ),
             model_name="CatBoostClassifier",
             model_type_key="catboost",
@@ -1088,6 +1090,7 @@ def _run_training_pass(
                 n_estimators=args.xgb_n_est,
                 max_depth=args.xgb_max_depth,
                 lr=args.xgb_lr,
+                gpu=gpu_gbdt,
             ),
             model_name="XGBClassifier",
             model_type_key="xgboost",
@@ -1112,6 +1115,7 @@ def _run_training_pass(
                 n_estimators=args.lgb_n_est,
                 max_depth=args.lgb_max_depth,
                 lr=args.lgb_lr,
+                gpu=gpu_gbdt,
             ),
             model_name="LGBMClassifier",
             model_type_key="lgb",
@@ -1309,6 +1313,14 @@ def main() -> int:
         args, device, temperature_grid, class1_grid, class2_grid, tree_blend_grid,
     )
 
+    # ---- save teacher checkpoint immediately so failures downstream don't waste it ----
+    teacher_model_path = Path(args.model_output)
+    teacher_report_path = Path(args.report_output)
+    dump_joblib_atomic(bundle_t, teacher_model_path)
+    write_json(teacher_report_path, report_t)
+    print(f"[checkpoint] teacher saved: {teacher_model_path}")
+    # -----------------------------------------------------------------------------------
+
     pseudo_log = None
     if args.pseudo_label:
         test_df_pl = load_test()
@@ -1323,6 +1335,7 @@ def main() -> int:
             pseudo_df, _ = pseudo_label_test(
                 bundle_t, test_df_pl, features,
                 threshold=best["threshold"],
+                class2_threshold=best.get("class2_threshold", best["threshold"]),
                 max_per_class=best.get("max_per_class"),
                 device=device,
             )
@@ -1338,6 +1351,7 @@ def main() -> int:
                     "student_oof": round(float(oof_s), 6),
                     "threshold_scan": scan[:5],
                     "selected_threshold": best["threshold"],
+                    "class2_threshold": best.get("class2_threshold", best["threshold"]),
                     "pseudo_samples": int(len(pseudo_df)),
                     "pseudo_per_class": {int(k): int(v) for k, v in pseudo_df["label"].value_counts().to_dict().items()},
                 }

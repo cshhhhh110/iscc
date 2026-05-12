@@ -27,7 +27,7 @@ LABELS = [0, 1, 2]
 TARGET_COLUMN = "label"
 ID_COLUMN = "name"
 FEATURE_COUNT = 15
-ARTIFACT_VERSION = "v1.8"
+ARTIFACT_VERSION = "v1.10"
 
 
 def append_log(message: str) -> None:
@@ -151,19 +151,29 @@ def pseudo_label_test(
     test_df: pd.DataFrame,
     features: list[str],
     threshold: float = 0.95,
+    class2_threshold: float | None = None,
     max_per_class: dict[int, int] | None = None,
     device=None,
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     """Predict test set with bundle, return high-confidence pseudo-labeled samples.
 
+    Uses per-class confidence thresholds: threshold for class 0/1,
+    class2_threshold for class 2 (defaults to threshold if None).
+
     Returns (pseudo_labeled_df, stats).
-    stats: {threshold, total, per_class_N, capped_from}
     """
     proba = predict_bundle_proba(bundle, test_df, device=device)
     max_proba = proba.max(axis=1)
     pseudo_labels = np.argmax(proba, axis=1).astype(int)
+    c2_th = float(class2_threshold) if class2_threshold is not None else float(threshold)
 
-    mask = max_proba >= threshold
+    # per-class mask
+    mask = np.zeros(len(test_df), dtype=bool)
+    for cls in range(3):
+        th = c2_th if cls == 2 else float(threshold)
+        cls_idx = (pseudo_labels == cls) & (max_proba >= th)
+        mask[cls_idx] = True
+
     df_full = pd.DataFrame({
         "__max_proba": max_proba,
         "__pseudo_label": pseudo_labels,
@@ -175,7 +185,6 @@ def pseudo_label_test(
         cls_indices = test_df.index[cls_mask]
         cap = max_per_class.get(int(cls)) if max_per_class else None
         if cap is not None and len(cls_indices) > cap:
-            # keep top-cap by confidence
             cls_scores = df_full.loc[cls_indices, "__max_proba"].sort_values(ascending=False)
             keep = cls_scores.index[:cap]
             drop = cls_scores.index[cap:]
@@ -188,6 +197,7 @@ def pseudo_label_test(
 
     stats = {
         "threshold": float(threshold),
+        "class2_threshold": c2_th,
         "total": int(mask.sum()),
         "per_class": {int(k): int(v) for k, v in pd.Series(pseudo_labels[mask]).value_counts().to_dict().items()},
         "capped": capped,
@@ -207,8 +217,10 @@ def scan_pseudo_thresholds(
 ) -> list[dict[str, object]]:
     """Scan thresholds for pseudo-label selection, return sorted by quality.
 
-    Returns list of {threshold, total, per_class, capped, score}.
-    score = total / max_possible but penalized for imbalance.
+    Tries per-class: class 0/1 use base threshold, class 2 uses lower threshold
+    to compensate for teacher's low confidence on class 2.
+
+    Returns list of {threshold, class2_threshold, total, per_class, capped, score}.
     """
     if thresholds is None:
         thresholds = [0.99, 0.97, 0.95, 0.92, 0.90, 0.85, 0.80]
@@ -216,18 +228,28 @@ def scan_pseudo_thresholds(
     max_per_class = {int(k): max(1, int(v * cap_ratio)) for k, v in label_counts.items()}
     results = []
     for th in thresholds:
-        _, stats = pseudo_label_test(bundle, test_df, features, threshold=th, max_per_class=max_per_class, device=device)
-        if stats["total"] < min_samples:
-            continue
-        # Score: prefer more samples and balanced classes
-        per_class = stats.get("per_class", {})
-        if per_class:
-            counts = np.array(list(per_class.values()), dtype=np.float32)
-            balance = 1.0 - float(counts.std() / (counts.mean() + 1e-9))
-        else:
-            balance = 0.0
-        score = float(stats["total"]) * (0.5 + 0.5 * max(0.0, balance))
-        results.append({**stats, "score": round(score, 1), "max_per_class": {int(k): int(v) for k, v in max_per_class.items()}})
+        for c2_offset in [0.0, 0.05, 0.10, 0.15, 0.20]:
+            c2_th = max(0.55, th - c2_offset)
+            _, stats = pseudo_label_test(
+                bundle, test_df, features,
+                threshold=th, class2_threshold=c2_th,
+                max_per_class=max_per_class, device=device,
+            )
+            if stats["total"] < min_samples:
+                continue
+            per_class = stats.get("per_class", {})
+            if per_class:
+                counts = np.array(list(per_class.values()), dtype=np.float32)
+                balance = 1.0 - float(counts.std() / (counts.mean() + 1e-9))
+            else:
+                balance = 0.0
+            score = float(stats["total"]) * (0.5 + 0.5 * max(0.0, balance))
+            results.append({
+                **stats,
+                "score": round(score, 1),
+                "max_per_class": {int(k): int(v) for k, v in max_per_class.items()},
+                "class2_offset": round(float(c2_offset), 2),
+            })
 
     results.sort(key=lambda r: r["score"], reverse=True)
     return results
@@ -287,40 +309,54 @@ def build_hgb_model(random_state: int = 2026, max_iter: int = 350) -> HistGradie
     )
 
 
-def build_catboost_model(random_state: int = 2026, iterations: int = 500, depth: int = 6, lr: float = 0.05):
+def build_catboost_model(random_state: int = 2026, iterations: int = 500, depth: int = 6, lr: float = 0.05, gpu: bool = False):
     from catboost import CatBoostClassifier
+    kwargs = {}
+    if gpu:
+        kwargs["task_type"] = "GPU"
+        kwargs["devices"] = "0"
     return CatBoostClassifier(
         iterations=iterations,
         depth=depth,
         learning_rate=lr,
         random_seed=random_state,
         verbose=False,
-        thread_count=1,
+        thread_count=4,
+        **kwargs,
     )
 
 
-def build_xgboost_model(random_state: int = 2026, n_estimators: int = 500, max_depth: int = 6, lr: float = 0.05):
+def build_xgboost_model(random_state: int = 2026, n_estimators: int = 500, max_depth: int = 6, lr: float = 0.05, gpu: bool = False):
     from xgboost import XGBClassifier
+    kwargs = {"n_jobs": 4}
+    if gpu:
+        kwargs["device"] = "cuda"
     return XGBClassifier(
         n_estimators=n_estimators,
         max_depth=max_depth,
         learning_rate=lr,
         random_state=random_state,
         enable_categorical=True,
-        n_jobs=1,
         verbosity=0,
+        **kwargs,
     )
 
 
-def build_lgb_model(random_state: int = 2026, n_estimators: int = 500, max_depth: int = 6, lr: float = 0.05):
+def build_lgb_model(random_state: int = 2026, n_estimators: int = 500, max_depth: int = 6, lr: float = 0.05, gpu: bool = False):
     from lightgbm import LGBMClassifier
+    kwargs = {}
+    if gpu:
+        kwargs["device"] = "gpu"
+        kwargs["n_jobs"] = 4
+    else:
+        kwargs["n_jobs"] = 4
     return LGBMClassifier(
         n_estimators=n_estimators,
         max_depth=max_depth,
         learning_rate=lr,
         random_state=random_state,
-        n_jobs=1,
         verbose=-1,
+        **kwargs,
     )
 
 
@@ -443,19 +479,21 @@ def _predict_tree_bundle_proba(bundle: Mapping[str, object], X: pd.DataFrame | n
 
 
 def _predict_torch_ensemble_proba(bundle: Mapping[str, object], X: np.ndarray, device=None) -> np.ndarray:
-    from tabular_nn import predict_torch_ensemble_proba
+    from tabular_nn import _validate_and_clip_features, predict_torch_ensemble_proba
 
     if isinstance(X, pd.DataFrame):
-        X = X.to_numpy(dtype=np.int64, copy=True)
+        feature_cols = bundle.get("feature_columns", [])
+        if feature_cols:
+            X = X[feature_cols].to_numpy(dtype=np.int64, copy=True)
+        else:
+            X = X.to_numpy(dtype=np.int64, copy=True)
     else:
         X = np.asarray(X, dtype=np.int64)
     fold_bundles = bundle.get("fold_models", [])
-    # clip to valid range per feature to avoid CUDA embedding OOB
     if fold_bundles:
-        card = np.array(fold_bundles[0].get("cardinalities", []), dtype=np.int64)
+        card = fold_bundles[0].get("cardinalities", [])
         if len(card) == X.shape[1]:
-            X = np.minimum(X, card - 1)
-            X = np.maximum(X, 0)
+            X = _validate_and_clip_features(X, card, "torch_infer")
     return predict_torch_ensemble_proba(fold_bundles, X, device=device)
 
 

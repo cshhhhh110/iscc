@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import random
+import sys
 from typing import Mapping, Sequence
 
 import numpy as np
@@ -11,6 +12,67 @@ from sklearn.metrics import f1_score
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
+
+
+# ---------------------------------------------------------------------------
+# SafeEmbedding — clips out-of-range indices and logs the first occurrence per
+# feature so we can root-cause cardinality mismatches without crashing.
+# ---------------------------------------------------------------------------
+class SafeEmbedding(nn.Module):
+    """nn.Embedding wrapper that clips indices to [0, num_embeddings-1]."""
+
+    _logged: set[tuple[int, int]] = set()  # (feature_idx, num_embeddings)
+
+    def __init__(self, num_embeddings: int, embedding_dim: int, feature_idx: int = -1):
+        super().__init__()
+        self.num_embeddings = int(num_embeddings)
+        self.feature_idx = int(feature_idx)
+        self.embed = nn.Embedding(self.num_embeddings, embedding_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        oob_mask = (x < 0) | (x >= self.num_embeddings)
+        if oob_mask.any():
+            key = (self.feature_idx, self.num_embeddings)
+            if key not in SafeEmbedding._logged:
+                SafeEmbedding._logged.add(key)
+                bad_vals = torch.unique(x[oob_mask]).tolist()
+                print(
+                    f"[SafeEmbedding] CLIP feature={self.feature_idx} "
+                    f"card={self.num_embeddings} OOB={bad_vals}",
+                    flush=True,
+                )
+            x = torch.clamp(x, 0, self.num_embeddings - 1)
+        return self.embed(x)
+
+
+def _validate_and_clip_features(
+    features: np.ndarray,
+    cardinalities: Sequence[int],
+    tag: str = "",
+) -> np.ndarray:
+    """Check each column against its cardinality; clip and log if OOB found."""
+    if features.shape[1] != len(cardinalities):
+        raise ValueError(
+            f"[{tag}] feature count mismatch: data has {features.shape[1]} cols, "
+            f"cardinalities has {len(cardinalities)}"
+        )
+    clipped = False
+    for i, card in enumerate(cardinalities):
+        col = features[:, i]
+        oob = (col < 0) | (col >= card)
+        if oob.any():
+            bad_vals = np.unique(col[oob]).tolist()
+            print(
+                f"[VALIDATE] {tag} col={i} card={card} OOB={bad_vals} "
+                f"n={int(oob.sum())}/{len(col)}",
+                flush=True,
+            )
+            col = np.clip(col, 0, card - 1)
+            features[:, i] = col
+            clipped = True
+    if clipped:
+        print(f"[VALIDATE] {tag}: features clipped to cardinalities", flush=True)
+    return features
 
 
 def seed_everything(seed: int) -> None:
@@ -186,7 +248,7 @@ class EmbeddingMLP(nn.Module):
         super().__init__()
         self.cardinalities = list(cardinalities)
         self.embeddings = nn.ModuleList(
-            [nn.Embedding(int(cardinality), embed_dim) for cardinality in self.cardinalities]
+            [SafeEmbedding(int(c), embed_dim, feature_idx=i) for i, c in enumerate(self.cardinalities)]
         )
         input_dim = len(self.cardinalities) * embed_dim
         layers: list[nn.Module] = [nn.LayerNorm(input_dim)]
@@ -236,7 +298,7 @@ class DeepCrossNetwork(nn.Module):
         super().__init__()
         self.cardinalities = list(cardinalities)
         self.embeddings = nn.ModuleList(
-            [nn.Embedding(int(cardinality), embed_dim) for cardinality in self.cardinalities]
+            [SafeEmbedding(int(c), embed_dim, feature_idx=i) for i, c in enumerate(self.cardinalities)]
         )
         self.input_dim = len(self.cardinalities) * embed_dim
         self.input_norm = nn.LayerNorm(self.input_dim)
@@ -313,7 +375,7 @@ class TabResidualNet(nn.Module):
         super().__init__()
         self.cardinalities = list(cardinalities)
         self.embeddings = nn.ModuleList(
-            [nn.Embedding(int(cardinality), embed_dim) for cardinality in self.cardinalities]
+            [SafeEmbedding(int(c), embed_dim, feature_idx=i) for i, c in enumerate(self.cardinalities)]
         )
         input_dim = len(self.cardinalities) * embed_dim
         self.stem = nn.Sequential(
@@ -357,7 +419,7 @@ class TinyTransformer(nn.Module):
         self.cardinalities = list(cardinalities)
         self.num_features = len(self.cardinalities)
         self.value_embeddings = nn.ModuleList(
-            [nn.Embedding(int(cardinality), d_model) for cardinality in self.cardinalities]
+            [SafeEmbedding(int(c), d_model, feature_idx=i) for i, c in enumerate(self.cardinalities)]
         )
         self.feature_embeddings = nn.Embedding(self.num_features, d_model)
         self.cls_token = nn.Parameter(torch.zeros(1, 1, d_model))
@@ -487,6 +549,8 @@ def predict_proba_model(
 ) -> np.ndarray:
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if hasattr(model, "cardinalities") and model.cardinalities:
+        features = _validate_and_clip_features(features, model.cardinalities, "infer")
     model.eval()
     dataset = CategoricalInferenceDataset(features)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0)
@@ -554,6 +618,8 @@ def train_torch_fold(
     desc: str,
 ) -> dict[str, object]:
     seed_everything(seed)
+    train_features = _validate_and_clip_features(train_features, cardinalities, f"{desc}-train")
+    valid_features = _validate_and_clip_features(valid_features, cardinalities, f"{desc}-valid")
     model = build_torch_model(arch, cardinalities, num_classes=train_targets.shape[1], config=config)
     model.to(device)
 

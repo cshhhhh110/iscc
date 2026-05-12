@@ -42,3 +42,16 @@
 - 认证：SSH（`git@github.com:cshhhhh110/iscc.git`）
 - 忽略规则：`.pt`、`.joblib`、`.npy`、`.cbm`、`.pkl`、`binaries/`、`docker容器/`、大CSV、`catboost_info/`、`.claude/`
 - 操作手册：`ISCC操作手册.md`
+
+## 跨机器部署（GPU 训练用）
+
+目标机：`LAPTOP-K4UA7J1Q` (RTX 4060 8GB, CUDA 13.1, conda at `D:\anaconda3`), 用户 `20665`, 工作目录 `E:\bisai\`
+
+流程：老机器打包 → HTTP 传文件 → 新机器装环境 → 训练。详细步骤见 `跨机器部署流程.md`。
+
+关键坑点：
+- env.yml 只包含本项目需要的包，不要混入其他项目依赖
+- pip 必须用完整路径 `D:\anaconda3\envs\iscc-gpu\python.exe -m pip`，否则系统 Python 抢 PATH
+- XGBoost 3.x GPU 用 `device="cuda"`，不是 `tree_method="gpu_hist"`
+- SSH 下无 GUI，notepad 不可用，用 PowerShell 改文件
+- HTTP 传文件：老机 `python -m http.server 8899`，新机 `curl` 拉

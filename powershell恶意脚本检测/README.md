@@ -1,6 +1,6 @@
-# ISCC PowerShell 恶意脚本检测 v1.7
+# ISCC PowerShell 恶意脚本检测 v1.10
 
-本项目用于 PowerShell 恶意脚本三分类任务，当前活跃版本为 `v1.7`。
+本项目用于 PowerShell 恶意脚本三分类任务，当前活跃版本为 `v1.10`。
 
 ## 数据
 
@@ -27,16 +27,19 @@ python .\源码\validate_submission.py
 |------|-----|------|----------|
 | v1.5 | 0.755537 | 0.69104 | 7候选fusion基线 |
 | v1.6 | 0.755472 | 0.68844 | 交互特征+KMeans+SMOTE+Focal Loss（无效） |
-| v1.7 | 0.755350 | 0.68965 | 对抗验证（无效） |
+| v1.7 | 0.755350 | 0.69779 | 对抗验证（无效），fusion |
+| v1.8 | 0.75194 | 0.69779 | tree-only + pseudo-label |
+| v1.9 | 0.755362 | 0.69150 | fusion+pseudo（有害）；AB：fusion裸0.690 tree裸0.689 |
+| v1.10 | - | - | tree+pseudo + 分class阈值（class 2降门槛） |
 
 ## 当前版本产物
 
-- `模型/model_bundle_v1.7.joblib`
-- `模型/validation_report_v1.7.json`
-- `提交结果/submission_v1.7.csv`
+- `模型/model_bundle_v1.10.joblib`
+- `模型/validation_report_v1.10.json`
+- `提交结果/submission_v1.10.csv`
 
 ## 版本记录
 
-- `版本记录/original/` ~ `版本记录/v1.4/`
+- `版本记录/original/` ~ `版本记录/v1.9/`
 
 项目级日志见 `ACTION_LOG.md`。
