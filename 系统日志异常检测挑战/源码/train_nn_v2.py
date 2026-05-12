@@ -115,7 +115,18 @@ def train_epoch(model, loader, optimizer, scheduler, class_weights, doc_pos_weig
 
         with torch.amp.autocast("cuda", enabled=use_amp):
             line_logits, doc_logits = model(features, mask)
-            line_loss = F.cross_entropy(line_logits.permute(0, 2, 1), labels, weight=cw, reduction="sum") / mask.sum().float()
+
+            # Length-weighted line loss: long docs get higher weight
+            doc_lens = mask.sum(dim=1).float().clamp(min=1)  # (B,)
+            len_w = torch.ones_like(doc_lens)
+            len_w[doc_lens > 100] = 3.0
+            len_w[(doc_lens > 50) & (doc_lens <= 100)] = 1.5
+            len_w = len_w / len_w.mean()  # normalize so avg weight = 1
+
+            line_ce = F.cross_entropy(line_logits.permute(0, 2, 1), labels, weight=cw, reduction="none")  # (B, T)
+            line_loss_per_doc = (line_ce * mask.float()).sum(dim=1) / doc_lens  # (B,)
+            line_loss = (line_loss_per_doc * len_w).mean()
+
             doc_loss = F.binary_cross_entropy_with_logits(doc_logits.squeeze(-1), has_anom, pos_weight=dpw, reduction="mean")
             loss = line_loss + 0.5 * doc_loss
 
