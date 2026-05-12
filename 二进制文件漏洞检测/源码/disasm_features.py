@@ -45,7 +45,7 @@ OPCODE_VOCAB = [
     "rdtsc", "cpuid", "pause", "lfence", "sfence", "mfence",
     "lock", "xadd", "cmpxchg",
     "pshufd", "movdqa", "movdqu", "padd", "psub", "pmul", "pxor", "pand",
-    "paddd", "psubd", "pmulld", "pxor", "pcmpeq", "pcmpgt",
+    "paddd", "psubd", "pmulld", "pcmpeq", "pcmpgt",
 ]
 
 # Explicitly define bigram pairs to track (most discriminative for vuln detection)
@@ -53,9 +53,9 @@ OPCODE_BIGRAMS = [
     # Stack manipulation patterns
     "push|push", "push|call", "push|mov", "pop|pop", "pop|ret",
     # Function prologue/epilogue
-    "push|mov", "mov|sub", "sub|mov", "mov|lea", "leave|ret",
+    "mov|sub", "sub|mov", "leave|ret",
     # Memory access patterns
-    "mov|mov", "mov|lea", "mov|cmp", "mov|test", "mov|xor",
+    "mov|mov", "mov|cmp", "mov|test", "mov|xor",
     "lea|mov", "lea|call",
     # Control flow
     "cmp|je", "cmp|jne", "cmp|jg", "cmp|jl", "cmp|jmp",
@@ -66,11 +66,13 @@ OPCODE_BIGRAMS = [
     # Buffer manipulation (relevant for overflow detection)
     "mov|add", "lea|add", "mov|inc", "lea|inc",
     # Loop patterns
-    "inc|cmp", "cmp|jl", "dec|jne",
+    "dec|jne",
     # XOR zeroing patterns
     "xor|cmp", "xor|test",
     # Repeated instructions (string ops, memcpy patterns)
     "rep|movs", "rep|stos", "mov|rep",
+    # Additional patterns (replacements for dedup)
+    "call|jmp", "pop|call", "and|jmp", "or|jmp", "mov|push",
 ]
 
 
@@ -258,12 +260,21 @@ CALL_WINDOW = 3
 STACK_FRAME_SIZES = [0, 8, 16, 32, 48, 64, 96, 128, 192, 256, 512]
 
 
+def _deterministic_hash(key: str, mod: int) -> int:
+    """FNV-1a style deterministic hash — stable across processes and runs."""
+    h = 2166136261
+    for ch in key:
+        h ^= ord(ch)
+        h = (h * 16777619) & 0xFFFFFFFF
+    return h % mod
+
+
 def _opcode_trigram_hash(opcodes: List[str]) -> Dict[str, float]:
     """Hashed opcode trigrams — 3 consecutive opcodes hashed into 128 bins."""
     feats: Dict[str, float] = {f"disasm_tri_{i:03d}": 0.0 for i in range(TRIGRAM_HASH_BINS)}
     for i in range(len(opcodes) - 2):
         key = f"{opcodes[i]}|{opcodes[i+1]}|{opcodes[i+2]}"
-        h = hash(key) % TRIGRAM_HASH_BINS
+        h = _deterministic_hash(key, TRIGRAM_HASH_BINS)
         feats[f"disasm_tri_{int(h):03d}"] += 1.0
     total = max(len(opcodes) - 2, 1)
     for k in feats:
