@@ -79,18 +79,21 @@ def main() -> int:
     print(f"  Train: {len(train_docs)} docs, Test: {len(test_docs)} docs")
 
     # Use parsed cache for train docs if available (much faster than re-parsing)
-    train_parsed_path = cache_dir / "train_parsed.joblib"
-    if train_parsed_path.exists():
-        print("  Using cached train parsed data")
-        train_parsed = joblib.load(train_parsed_path)
-        # Verify order by checking doc_ids
-        train_ids_path = cache_dir / "train_ids.joblib"
-        if train_ids_path.exists():
-            cached_ids = joblib.load(train_ids_path)
+    # Cache keyed by train file name prefix, so different train files don't clash
+    prefix = Path(args.train_file).stem
+    train_parsed_path = cache_dir / f"{prefix}_parsed.joblib"
+    train_ids_path = cache_dir / f"{prefix}_ids.joblib"
+    if train_parsed_path.exists() and train_ids_path.exists():
+        cached_ids = joblib.load(train_ids_path)
+        if len(cached_ids) == len(train_docs):
+            train_parsed = joblib.load(train_parsed_path)
             for i, (cid, doc) in enumerate(zip(cached_ids, train_docs)):
                 if str(cid) != str(doc.doc_id):
                     raise ValueError(f"Cache order mismatch at index {i}: cached={cid}, doc={doc.doc_id}")
-            print(f"  Cache order verified: {len(cached_ids)} docs match")
+            print(f"  Using cached parsed data: {len(cached_ids)} docs match")
+        else:
+            print(f"  Cache length mismatch ({len(cached_ids)} vs {len(train_docs)}), re-parsing...")
+            train_parsed = parse_documents_batch(train_docs)
     else:
         print("  Parsing train docs (no cache found)...")
         train_parsed = parse_documents_batch(train_docs)

@@ -142,3 +142,37 @@
 [2026-05-12 09:49:59] NNv3 Fold 5: best_epoch=12, val_score=0.950928.
 [2026-05-12 09:51:01] NNv3 OOF default=0.950942, tuned=0.955284, final_epochs=12.
 [2026-05-12 10:00:38] NNv3 Training completed: model=E:\赛题数据\系统日志异常检测挑战\模型\model_bundle_nn_v3.joblib.
+[2026-05-12 16:33:43] Training started (BiLSTM v2).
+[2026-05-12 16:50:43] NN Fold 1: best_epoch=22, val_score=0.952308.
+[2026-05-12 17:08:20] NN Fold 2: best_epoch=29, val_score=0.965027.
+[2026-05-12 17:25:14] NN Fold 3: best_epoch=27, val_score=0.959361.
+[2026-05-12 17:41:22] NN Fold 4: best_epoch=21, val_score=0.959911.
+[2026-05-12 17:58:10] NN Fold 5: best_epoch=24, val_score=0.964061.
+[2026-05-12 17:58:11] NN OOF score=0.960147, final_epochs=24.
+[2026-05-12 18:13:10] NN Training completed: model=E:\赛题数据\系统日志异常检测挑战\模型\model_bundle_nn_v2_seed42.joblib, submission=E:\赛题数据\系统日志异常检测挑战\提交结果\submission_nn_v2_seed42.csv.
+[2026-05-12 18:19:47] Training started (BiLSTM v2).
+[2026-05-12 18:35:50] NN Fold 1: best_epoch=27, val_score=0.952808.
+[2026-05-12 18:52:43] NN Fold 2: best_epoch=30, val_score=0.955526.
+[2026-05-12 19:09:30] NN Fold 3: best_epoch=30, val_score=0.962280.
+[2026-05-12 19:26:11] NN Fold 4: best_epoch=29, val_score=0.963640.
+[2026-05-12 19:34:40] NN Fold 5: best_epoch=7, val_score=0.923662.
+[2026-05-12 19:34:40] NN OOF score=0.951599, final_epochs=29.
+[2026-05-12 19:52:56] NN Training completed: model=E:\赛题数据\系统日志异常检测挑战\模型\model_bundle_nn_v2.joblib, submission=E:\赛题数据\系统日志异常检测挑战\提交结果\submission_nn_v2.csv.
+[2026-05-12 20:21:49] Pseudo-labeling v2: 4175 accepted (2390 anom, 1785 norm) from 5000 test docs. Output: pseudo_train_v2.csv
+[2026-05-12 20:25:48] Pseudo-labeling v2: 3682 accepted (1897 anom, 1785 norm) from 5000 test docs. Output: pseudo_train_v2.csv
+[2026-05-12 20:36:06] Training started (BiLSTM v2).
+[2026-05-12 20:52:43] NN Fold 1: best_epoch=28, val_score=0.959219.
+[2026-05-12 21:10:06] NN Fold 2: best_epoch=25, val_score=0.959718.
+[2026-05-12 21:25:26] NN Fold 3: best_epoch=19, val_score=0.960025.
+[2026-05-12 21:42:54] NN Fold 4: best_epoch=30, val_score=0.952654.
+[2026-05-12 22:00:09] NN Fold 5: best_epoch=30, val_score=0.960424.
+[2026-05-12 22:20:30] Training started (BiLSTM v2, seed=20260504, amp=True).
+[2026-05-12 22:22:43] Training started (BiLSTM v2, seed=20260504, amp=True).
+[2026-05-12 22:25:57] Training started (BiLSTM v2, seed=20260504, amp=True).
+[2026-05-12 22:38:35] Fold 1: epoch=30, score=0.965530. ckpt saved.
+[2026-05-12 22:50:28] Fold 2: epoch=25, score=0.965134. ckpt saved.
+[2026-05-12 23:02:17] Fold 3: epoch=30, score=0.964239. ckpt saved.
+[2026-05-12 23:13:19] Fold 4: epoch=20, score=0.951092. ckpt saved.
+[2026-05-12 23:25:20] Fold 5: epoch=22, score=0.963861. ckpt saved.
+[2026-05-12 23:25:21] OOF=0.961969, final_epochs=25.
+[2026-05-12 23:33:00] Training completed: 模型\model_bundle_nn_v2_pseudo.joblib

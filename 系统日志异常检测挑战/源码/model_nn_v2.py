@@ -136,7 +136,7 @@ class LogBiLSTM(nn.Module):
 
         # Doc-level prediction via attention pooling
         attn_scores = self.attn(lstm_out)  # (B, T, 1)
-        attn_scores = attn_scores.masked_fill(~mask.unsqueeze(-1), -1e10)
+        attn_scores = attn_scores.masked_fill(~mask.unsqueeze(-1), -6e4)
         attn_weights = F.softmax(attn_scores, dim=1)  # (B, T, 1)
         doc_vec = (lstm_out * attn_weights).sum(dim=1)  # (B, lstm_out)
         doc_logits = self.doc_head(doc_vec)  # (B, 1)

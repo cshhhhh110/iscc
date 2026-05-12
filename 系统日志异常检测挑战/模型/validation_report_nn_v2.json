@@ -1,74 +1,67 @@
 {
   "version": 4,
   "model": "BiLSTM_v2",
-  "train_rows": 20000,
+  "train_rows": 23682,
   "test_rows": 5000,
   "folds": 5,
   "epochs": 30,
-  "patience": 8,
-  "batch_size": 32,
-  "lr": 0.001,
-  "weight_decay": 0.0001,
-  "grad_clip": 1.0,
-  "hidden_dim": 256,
-  "dropout": 0.35,
-  "lstm_layers": 2,
   "input_dim": 300,
+  "hidden_dim": 256,
   "final_epochs": 25,
   "best_epochs": [
-    23,
-    25,
-    19,
     30,
-    30
+    25,
+    30,
+    20,
+    22
   ],
   "oof_metrics": {
-    "score": 0.9565135311226451,
-    "f1_detect": 0.9999490556536952,
-    "iou_loc": 0.915035297280325,
-    "f1_type": 0.9971529260983669,
-    "eligible_anomaly_rows": 11361
+    "score": 0.9619694684142712,
+    "f1_detect": 0.9999143189317092,
+    "iou_loc": 0.925442208742144,
+    "f1_type": 0.997889189152694,
+    "eligible_anomaly_rows": 13258
   },
   "fold_reports": [
     {
       "fold": 1,
-      "train_rows": 16000,
-      "valid_rows": 4000,
-      "best_epoch": 23,
-      "val_loss": 0.04424,
-      "val_score": 0.949792
+      "train_rows": 18945,
+      "valid_rows": 4737,
+      "best_epoch": 30,
+      "val_loss": 0.042044,
+      "val_score": 0.96553
     },
     {
       "fold": 2,
-      "train_rows": 16000,
-      "valid_rows": 4000,
+      "train_rows": 18945,
+      "valid_rows": 4737,
       "best_epoch": 25,
-      "val_loss": 0.039957,
-      "val_score": 0.959718
+      "val_loss": 0.040592,
+      "val_score": 0.965134
     },
     {
       "fold": 3,
-      "train_rows": 16000,
-      "valid_rows": 4000,
-      "best_epoch": 19,
-      "val_loss": 0.042186,
-      "val_score": 0.960025
+      "train_rows": 18946,
+      "valid_rows": 4736,
+      "best_epoch": 30,
+      "val_loss": 0.047072,
+      "val_score": 0.964239
     },
     {
       "fold": 4,
-      "train_rows": 16000,
-      "valid_rows": 4000,
-      "best_epoch": 30,
-      "val_loss": 0.039293,
-      "val_score": 0.952654
+      "train_rows": 18946,
+      "valid_rows": 4736,
+      "best_epoch": 20,
+      "val_loss": 0.045021,
+      "val_score": 0.951092
     },
     {
       "fold": 5,
-      "train_rows": 16000,
-      "valid_rows": 4000,
-      "best_epoch": 30,
-      "val_loss": 0.042213,
-      "val_score": 0.960424
+      "train_rows": 18946,
+      "valid_rows": 4736,
+      "best_epoch": 22,
+      "val_loss": 0.038552,
+      "val_score": 0.963861
     }
   ],
   "submission_validation": {
