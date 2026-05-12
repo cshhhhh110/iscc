@@ -199,49 +199,8 @@ def _score_params(params, search_docs, search_probs, search_doc_probs):
     return evaluate_predictions(search_docs, preds)["score"]
 
 
-def tune_per_type_thresholds(docs, probs, doc_probs, rng):
-    """Line-search best threshold for each type independently."""
-    type_thr = {}
-    for label in ANOMALY_TYPES:
-        best_thr, best_score = 0.35, -1.0
-        for thr in np.linspace(0.10, 0.65, 20):
-            params = _default_params()
-            params["type_thresholds"] = {l: thr if l == label else 0.35 for l in ANOMALY_TYPES}
-            score = _score_params(params, docs, probs, doc_probs)
-            if score > best_score:
-                best_score, best_thr = score, float(thr)
-        type_thr[label] = best_thr
-    return type_thr
-
-
-def tune_global_params(docs, probs, doc_probs, type_thr, rng, n=150):
-    """Random search over global decoder params with per-type thresholds fixed."""
-    best_params = _default_params()
-    best_params["type_thresholds"] = type_thr
-    best_score = _score_params(best_params, docs, probs, doc_probs)
-
-    for _ in tqdm(range(n), desc="tune global params", unit="trial", dynamic_ncols=True):
-        params = {
-            "type_thresholds": type_thr,
-            "smoothing_window": int(rng.integers(1, 6)),
-            "gap_merge": int(rng.integers(0, 3)),
-            "min_span_len": int(rng.integers(1, 5)),
-            "max_span_len": int(rng.integers(6, 20)),
-            "max_spans": int(rng.integers(1, 4)),
-            "doc_threshold": float(rng.uniform(0.2, 0.7)),
-            "long_doc_thr_offset": float(rng.uniform(0.0, 0.15)),
-            "long_doc_max_len": int(rng.integers(12, 30)),
-            "type_span_lengths": TYPE_SPAN_LENGTHS,
-        }
-        score = _score_params(params, docs, probs, doc_probs)
-        if score > best_score:
-            best_score, best_params = score, params
-
-    return best_params, best_score
-
-
-def tune_all(docs, probs, doc_probs, n_global=150):
-    """Full tuning: per-type thresholds first, then global params."""
+def tune_all(docs, probs, doc_probs, n_trials=300):
+    """Joint random search over ALL params (per-type thresholds + global) together."""
     rng = np.random.default_rng(DEFAULT_SEED + 777)
 
     # Sample for speed
@@ -258,16 +217,42 @@ def tune_all(docs, probs, doc_probs, n_global=150):
 
     sd = [docs[int(i)] for i in idx]; sp = [probs[int(i)] for i in idx]; sdp = doc_probs[idx]
 
-    print("  Stage 1: per-type thresholds...")
-    type_thr = tune_per_type_thresholds(sd, sp, sdp, rng)
-    print(f"    {', '.join(f'{k}={v:.3f}' for k, v in sorted(type_thr.items(), key=lambda x: -x[1]))}")
+    # Predefined decoder grid for global params
+    decoder_grid = [
+        (1, 0, 2, 8, 2), (1, 1, 2, 10, 2), (3, 0, 2, 8, 2),
+        (3, 1, 2, 10, 2), (3, 1, 2, 12, 2), (3, 1, 3, 10, 2),
+        (5, 1, 2, 10, 2), (5, 1, 3, 12, 2), (3, 2, 3, 12, 2),
+        (1, 0, 2, 10, 1), (3, 1, 2, 10, 1), (3, 1, 3, 12, 1),
+    ]
 
-    print(f"  Stage 2: global params ({n_global} trials)...")
-    best_params, best_score = tune_global_params(sd, sp, sdp, type_thr, rng, n_global)
-    print(f"    Score={best_score:.6f}, sw={best_params['smoothing_window']}, gm={best_params['gap_merge']}, "
-          f"msl={best_params['min_span_len']}, mxl={best_params['max_span_len']}, ms={best_params['max_spans']}, "
-          f"dt={best_params['doc_threshold']:.3f}, ld_off={best_params['long_doc_thr_offset']:.3f}, ld_mxl={best_params['long_doc_max_len']}")
+    best_params = _default_params()
+    best_score = _score_params(best_params, sd, sp, sdp)
 
+    for _ in tqdm(range(n_trials), desc="tune all params", unit="trial", dynamic_ncols=True):
+        type_thr = {label: float(rng.uniform(0.15, 0.65)) for label in ANOMALY_TYPES}
+        sw, gm, msl, mxl, ms = decoder_grid[rng.integers(0, len(decoder_grid))]
+        dt = float(rng.uniform(0.3, 0.7))
+        ld_off = float(rng.uniform(0.0, 0.12))
+        ld_mxl = int(rng.integers(12, 28))
+
+        params = {
+            "type_thresholds": type_thr,
+            "smoothing_window": int(sw), "gap_merge": int(gm),
+            "min_span_len": int(msl), "max_span_len": int(mxl),
+            "max_spans": int(ms), "doc_threshold": dt,
+            "long_doc_thr_offset": ld_off, "long_doc_max_len": ld_mxl,
+            "type_span_lengths": TYPE_SPAN_LENGTHS,
+        }
+        score = _score_params(params, sd, sp, sdp)
+        if score > best_score:
+            best_score, best_params = score, params
+
+    print(f"  Best OOF: {best_score:.6f}")
+    print(f"  Thresholds: {', '.join(f'{k}={v:.3f}' for k, v in sorted(best_params['type_thresholds'].items(), key=lambda x: -x[1]))}")
+    print(f"  Global: sw={best_params['smoothing_window']}, gm={best_params['gap_merge']}, "
+          f"msl={best_params['min_span_len']}, mxl={best_params['max_span_len']}, "
+          f"ms={best_params['max_spans']}, dt={best_params['doc_threshold']:.3f}, "
+          f"ld_off={best_params['long_doc_thr_offset']:.3f}, ld_mxl={best_params['long_doc_max_len']}")
     return best_params, best_score
 
 
