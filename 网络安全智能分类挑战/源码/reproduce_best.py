@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from copy import deepcopy
@@ -176,7 +177,12 @@ def train_group(seeds, x_train, y, x_test, n_classes, device):
 
 def train(args):
     if torch.cuda.is_available():
-        device = torch.device("cuda"); torch.backends.cudnn.benchmark = True; torch.set_float32_matmul_precision("high")
+        device = torch.device("cuda")
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        torch.use_deterministic_algorithms(True, warn_only=True)
+        torch.set_float32_matmul_precision("high")
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     else:
         device = torch.device("cpu")
 
