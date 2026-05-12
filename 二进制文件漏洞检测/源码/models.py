@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 
-MODEL_VERSION = "v2.5"
+MODEL_VERSION = "v2.6"
 
 LEGACY_LABEL_MODEL_NAME = "label_model.joblib"
 LEGACY_CWE_MODEL_NAME = "cwe_model.joblib"

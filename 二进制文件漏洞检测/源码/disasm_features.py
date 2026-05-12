@@ -1,4 +1,4 @@
-"""Capstone disassembly feature extraction for binary vulnerability detection (v2.4)."""
+"""Capstone disassembly feature extraction for binary vulnerability detection (v2.6)."""
 
 from __future__ import annotations
 
@@ -251,6 +251,101 @@ def _instr_length_stats(sizes: List[int], instr_bytes: List[bytes]) -> Dict[str,
     return feats
 
 
+# ---- v2.6 new features ----
+
+TRIGRAM_HASH_BINS = 128
+CALL_WINDOW = 3
+STACK_FRAME_SIZES = [0, 8, 16, 32, 48, 64, 96, 128, 192, 256, 512]
+
+
+def _opcode_trigram_hash(opcodes: List[str]) -> Dict[str, float]:
+    """Hashed opcode trigrams — 3 consecutive opcodes hashed into 128 bins."""
+    feats: Dict[str, float] = {f"disasm_tri_{i:03d}": 0.0 for i in range(TRIGRAM_HASH_BINS)}
+    for i in range(len(opcodes) - 2):
+        key = f"{opcodes[i]}|{opcodes[i+1]}|{opcodes[i+2]}"
+        h = hash(key) % TRIGRAM_HASH_BINS
+        feats[f"disasm_tri_{int(h):03d}"] += 1.0
+    total = max(len(opcodes) - 2, 1)
+    for k in feats:
+        feats[k] /= total
+    return feats
+
+
+def _call_neighborhood(opcodes: List[str]) -> Dict[str, float]:
+    """Opcode patterns around call instructions."""
+    feats: Dict[str, float] = {}
+    n = len(opcodes)
+    call_positions = [i for i, o in enumerate(opcodes) if o == "call"]
+    if not call_positions:
+        for k in ["call_pre_push", "call_pre_mov", "call_post_mov", "call_post_test", "call_post_add"]:
+            feats[f"disasm_{k}"] = 0.0
+        feats["disasm_call_density"] = 0.0
+        return feats
+
+    pre_push = pre_mov = post_mov = post_test = post_add = 0
+    for pos in call_positions:
+        for j in range(max(0, pos - CALL_WINDOW), pos):
+            if j < n:
+                if opcodes[j] == "push":
+                    pre_push += 1
+                elif opcodes[j] == "mov":
+                    pre_mov += 1
+        for j in range(pos + 1, min(n, pos + CALL_WINDOW + 1)):
+            if j < n:
+                if opcodes[j] == "mov":
+                    post_mov += 1
+                elif opcodes[j] == "test":
+                    post_test += 1
+                elif opcodes[j] == "add":
+                    post_add += 1
+    nc = len(call_positions)
+    feats["disasm_call_pre_push"] = pre_push / max(nc, 1)
+    feats["disasm_call_pre_mov"] = pre_mov / max(nc, 1)
+    feats["disasm_call_post_mov"] = post_mov / max(nc, 1)
+    feats["disasm_call_post_test"] = post_test / max(nc, 1)
+    feats["disasm_call_post_add"] = post_add / max(nc, 1)
+    feats["disasm_call_density"] = nc / max(n, 1)
+    return feats
+
+
+def _stack_frame_stats(opcodes: List[str], op_strs: List[str]) -> Dict[str, float]:
+    """Detect function prologues and extract stack frame sizes."""
+    feats: Dict[str, float] = {}
+    n = len(opcodes)
+    # Detect push rbp/rbx; mov rbp/rbx, rsp; sub rsp, X
+    frame_sizes: List[int] = []
+    i = 0
+    while i < n - 2:
+        if opcodes[i] == "push" and opcodes[i + 1] == "mov" and opcodes[i + 2] == "sub":
+            # mov rbp, rsp or mov ebp, esp
+            ops1 = op_strs[i + 1] if i + 1 < n else ""
+            if "bp" in ops1 and "sp" in ops1:
+                # sub rsp, X → extract immediate
+                ops2 = op_strs[i + 2] if i + 2 < n else ""
+                nums = re.findall(r'(?:0x[0-9a-f]+|\b[0-9]+)', ops2)
+                if nums:
+                    val = int(nums[0], 16) if nums[0].startswith("0x") else int(nums[0])
+                    frame_sizes.append(val)
+                    i += 3
+                    continue
+        i += 1
+
+    if frame_sizes:
+        feats["disasm_stack_frame_mean"] = float(np.mean(frame_sizes))
+        feats["disasm_stack_frame_max"] = float(max(frame_sizes))
+        feats["disasm_stack_frame_count"] = float(len(frame_sizes))
+        # Binned counts
+        for sz in STACK_FRAME_SIZES:
+            feats[f"disasm_stack_ge_{sz}"] = sum(1 for s in frame_sizes if s >= sz) / len(frame_sizes)
+    else:
+        feats["disasm_stack_frame_mean"] = 0.0
+        feats["disasm_stack_frame_max"] = 0.0
+        feats["disasm_stack_frame_count"] = 0.0
+        for sz in STACK_FRAME_SIZES:
+            feats[f"disasm_stack_ge_{sz}"] = 0.0
+    return feats
+
+
 def extract_disasm_features(binary_path: Path) -> Dict[str, float]:
     """Extract Capstone disassembly features from a PE binary."""
     feats: Dict[str, float] = {}
@@ -285,6 +380,9 @@ def extract_disasm_features(binary_path: Path) -> Dict[str, float]:
     feats.update(_function_stats(opcodes))
     feats.update(_operand_stats(opcodes, op_strs))
     feats.update(_instr_length_stats(sizes, instr_bytes))
+    feats.update(_opcode_trigram_hash(opcodes))
+    feats.update(_call_neighborhood(opcodes))
+    feats.update(_stack_frame_stats(opcodes, op_strs))
     return feats
 
 
@@ -320,4 +418,16 @@ def get_disasm_feature_names() -> List[str]:
     names.append("disasm_std_instr_bytes")
     names.append("disasm_long_instr_ratio")
     names.append("disasm_verylong_instr_ratio")
+    # Trigram hash
+    for i in range(TRIGRAM_HASH_BINS):
+        names.append(f"disasm_tri_{i:03d}")
+    # Call neighborhood
+    for k in ["call_pre_push", "call_pre_mov", "call_post_mov", "call_post_test", "call_post_add", "call_density"]:
+        names.append(f"disasm_{k}")
+    # Stack frame
+    names.append("disasm_stack_frame_mean")
+    names.append("disasm_stack_frame_max")
+    names.append("disasm_stack_frame_count")
+    for sz in STACK_FRAME_SIZES:
+        names.append(f"disasm_stack_ge_{sz}")
     return names

@@ -1,4 +1,4 @@
-"""v2.5 training: v2.4 + per-class shrinkage scalar fusion + OOF analysis."""
+"""v2.6 training: v2.4 backbone + extended Capstone (trigram hash + call neighborhood + stack frame)."""
 
 from __future__ import annotations
 
@@ -718,7 +718,7 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     seeds = args.seeds
-    print(f"v2.4 ensemble training: seeds={seeds}, device={DEVICE}")
+    print(f"v2.6 ensemble training: seeds={seeds}, device={DEVICE}")
     print(f"pseudo-label thresholds: label>{PSEUDO_LABEL_THRESH_HIGH}/<{PSEUDO_LABEL_THRESH_LOW}, cwe>{PSEUDO_CWE_THRESH}")
 
     # ---- Phase 1: Pseudo-labeling ----
@@ -787,7 +787,7 @@ def main():
                              "dropout": args.dropout, "byte_embedding_dim": args.byte_embedding_dim},
             "normalizer": {"mean": torch.from_numpy(normalizer.mean), "std": torch.from_numpy(normalizer.std)},
             "feature_columns": feature_columns, "cwe_classes": cwe_classes,
-            "byte_length": int(args.byte_length), "metrics": neural_metrics, "model_version": "v2.5", "seed": seed,
+            "byte_length": int(args.byte_length), "metrics": neural_metrics, "model_version": "v2.6", "seed": seed,
         }, MODEL_DIR / seed_neural_bundle(seed))
 
         # Scalar fusion grid search on val set
@@ -812,34 +812,6 @@ def main():
             nw_cwe, s_cm = 1.0, 0.0
         print(f"Scalar fusion seed={seed}: label_f1={s_lf1:.4f} cwe_macro={s_cm:.4f}")
 
-        # Per-class shrinkage CWE weights (v2.5)
-        per_class_cwe_weights = {}
-        if pos_mask_val.any():
-            train_cwe_counts = np.bincount(y_cwe[train_idx][y_cwe[train_idx] >= 0],
-                                           minlength=len(cwe_classes)).astype(np.float64)
-            for c in range(len(cwe_classes)):
-                c_mask_val = y_cwe[val_idx] == c
-                n_c = train_cwe_counts[c]
-                alpha = n_c / (n_c + 50.0)
-                if c_mask_val.sum() > 0:
-                    best_w, best_f1 = nw_cwe, -1.0
-                    for w in np.linspace(0.0, 1.0, 41):
-                        fused_c = w * neural_cp[c_mask_val, c] + (1.0 - w) * tree_cp_full[c_mask_val, c]
-                        pred = (fused_c >= 0.5).astype(int)
-                        tp = pred.sum()
-                        fp = tp  # simplified: count positives
-                        fn = int(c_mask_val.sum()) - tp
-                        prec = tp / max(tp + (neural_cp[~c_mask_val, c] * w > 0.5).sum(), 1)
-                        rec = tp / max(tp + fn, 1)
-                        f1_c = 2 * prec * rec / max(prec + rec, 1e-12)
-                        if f1_c > best_f1:
-                            best_f1, best_w = f1_c, float(w)
-                    # Shrinkage: small classes pull toward global weight
-                    w_shrunk = alpha * best_w + (1.0 - alpha) * nw_cwe
-                else:
-                    w_shrunk = nw_cwe  # no val samples → use global
-                per_class_cwe_weights[str(c)] = float(w_shrunk)
-
         seed_results[seed] = {
             "scalar_label_f1": float(s_lf1), "scalar_cwe_macro": float(s_cm),
             "scalar_threshold": float(s_thresh),
@@ -849,7 +821,6 @@ def main():
             "scalar_tree_cwe_weight": float(1.0 - nw_cwe),
             "neural_label_f1": float(neural_metrics["label_f1"]),
             "neural_cwe_macro": float(neural_metrics["cwe_macro_f1"]),
-            "per_class_cwe_weights": per_class_cwe_weights,
         }
         print(f"Seed {seed} done: scalar_cwe={s_cm:.4f}")
 
@@ -870,16 +841,8 @@ def main():
     weighted_nw_cwe = float(np.average([r["scalar_neural_cwe_weight"] for r in seed_results.values()],
                                         weights=cwe_scores))
 
-    # Average per-class CWE weights across seeds (weighted by seed performance, v2.5)
-    avg_per_class_cwe_weights = {}
-    for c in range(len(cwe_classes)):
-        w_c = float(np.average(
-            [seed_results[s]["per_class_cwe_weights"][str(c)] for s in seeds],
-            weights=cwe_scores))
-        avg_per_class_cwe_weights[str(c)] = w_c
-
     ensemble_config = {
-        "model_version": "v2.5",
+        "model_version": "v2.6",
         "device": str(DEVICE),
         "byte_length": int(args.byte_length),
         "batch_size": int(args.batch_size),
@@ -894,7 +857,6 @@ def main():
         "scalar_neural_cwe_weight": float(weighted_nw_cwe),
         "scalar_tree_cwe_weight": float(1.0 - weighted_nw_cwe),
         "fusion_threshold": float(np.mean([r["scalar_threshold"] for r in seed_results.values()])),
-        "per_class_cwe_weights": avg_per_class_cwe_weights,
         "seed_results": {str(s): r for s, r in seed_results.items()},
         "avg_scalar_cwe_macro": float(avg_scalar),
         "cwe_loss_weight": float(args.cwe_loss_weight),
@@ -909,13 +871,13 @@ def main():
     # Save combined tabular bundle (pointing to per-seed files)
     joblib.dump({
         "seeds": seeds, "feature_columns": feature_columns, "cwe_classes": cwe_classes,
-        "model_version": "v2.5", "label_model_files": {s: seed_label_model(s) for s in seeds},
+        "model_version": "v2.6", "label_model_files": {s: seed_label_model(s) for s in seeds},
         "cwe_model_files": {s: seed_cwe_model(s) for s in seeds},
     }, MODEL_DIR / TABULAR_BUNDLE_NAME)
 
     print(f"\n{'='*60}")
-    print(f"v2.5 training complete!")
-    print(f"Fusion mode: per-class shrinkage scalar + SWA + cosine + Capstone extended")
+    print(f"v2.6 training complete!")
+    print(f"Fusion mode: scalar + SWA + cosine + Capstone v2")
     print(f"Avg scalar CWE macro: {avg_scalar:.4f}")
     print(f"Ensemble config: {MODEL_DIR / FUSION_CONFIG_NAME}")
     print(f"{'='*60}")
