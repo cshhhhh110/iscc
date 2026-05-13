@@ -28,6 +28,8 @@ from common import (
 )
 from model_nn_v2 import LABEL_TO_TYPE, NUM_LABELS, O_LABEL, LogBiLSTM, collate_batch
 
+RUN_TAG = "v16_lwline"
+
 
 class DocDataset(Dataset):
     def __init__(self, data: list[dict]): self.data = data
@@ -115,18 +117,7 @@ def train_epoch(model, loader, optimizer, scheduler, class_weights, doc_pos_weig
 
         with torch.amp.autocast("cuda", enabled=use_amp):
             line_logits, doc_logits = model(features, mask)
-
-            # Length-weighted line loss: long docs get higher weight
-            doc_lens = mask.sum(dim=1).float().clamp(min=1)  # (B,)
-            len_w = torch.ones_like(doc_lens)
-            len_w[doc_lens > 100] = 3.0
-            len_w[(doc_lens > 50) & (doc_lens <= 100)] = 1.5
-            len_w = len_w / len_w.mean()  # normalize so avg weight = 1
-
-            line_ce = F.cross_entropy(line_logits.permute(0, 2, 1), labels, weight=cw, reduction="none")  # (B, T)
-            line_loss_per_doc = (line_ce * mask.float()).sum(dim=1) / doc_lens  # (B,)
-            line_loss = (line_loss_per_doc * len_w).mean()
-
+            line_loss = F.cross_entropy(line_logits.permute(0, 2, 1), labels, weight=cw, reduction="sum") / mask.sum().float()
             doc_loss = F.binary_cross_entropy_with_logits(doc_logits.squeeze(-1), has_anom, pos_weight=dpw, reduction="mean")
             loss = line_loss + 0.5 * doc_loss
 
@@ -238,7 +229,7 @@ def main() -> int:
 
     # 5-fold CV with checkpoint resume
     prefix = Path(args.train_file).stem
-    ckpt_path = cache_dir / f"train_ckpt_{prefix}_seed{args.seed}.joblib"
+    ckpt_path = cache_dir / f"train_ckpt_{RUN_TAG}_{prefix}_seed{args.seed}.joblib"
     y = np.array([item["has_anomaly"] for item in dense_train], dtype=np.int32)
     cv = StratifiedKFold(n_splits=args.folds, shuffle=True, random_state=args.seed)
 
@@ -266,11 +257,14 @@ def main() -> int:
         train_loader = _make_loader(DocDataset(train_data), args.batch_size, shuffle=True, num_workers=args.num_workers, persistent=True)
         val_loader = _make_loader(DocDataset(val_data), args.batch_size, shuffle=False, num_workers=args.num_workers)
 
+        fold_seed = args.seed + fold_idx * 1000
+        torch.manual_seed(fold_seed)
+        if device.type == "cuda":
+            torch.cuda.manual_seed_all(fold_seed)
+
         model = LogBiLSTM(input_dim=input_dim, hidden_dim=args.hidden_dim,
                           num_labels=NUM_LABELS, dropout=args.dropout,
                           num_lstm_layers=args.lstm_layers).to(device)
-        torch.manual_seed(args.seed + fold_idx * 1000)
-        if device.type == "cuda": torch.cuda.manual_seed_all(args.seed + fold_idx * 1000)
 
         model, val_preds, best_epoch, best_loss = train_fold(
             model, train_loader, val_loader, args, fold_idx, device, class_weights, doc_pos_weight)
@@ -306,11 +300,14 @@ def main() -> int:
     # Full retrain
     print("\n=== Full retrain ===")
     full_loader = _make_loader(DocDataset(dense_train), args.batch_size, shuffle=True, num_workers=args.num_workers, persistent=True)
+    full_seed = args.seed + 90000
+    torch.manual_seed(full_seed)
+    if device.type == "cuda":
+        torch.cuda.manual_seed_all(full_seed)
+
     full_model = LogBiLSTM(input_dim=input_dim, hidden_dim=args.hidden_dim,
                            num_labels=NUM_LABELS, dropout=args.dropout,
                            num_lstm_layers=args.lstm_layers).to(device)
-    torch.manual_seed(args.seed + 90000)
-    if device.type == "cuda": torch.cuda.manual_seed_all(args.seed + 90000)
 
     optimizer = AdamW(full_model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = CosineAnnealingLR(optimizer, T_max=final_epochs)
@@ -332,7 +329,7 @@ def main() -> int:
     sample_columns = read_sample_columns(data_dir / args.sample_file)
     val_info = validate_submission_file(args.submission_path, test_docs, sample_columns)
 
-    bundle = {"version": 4, "model": "BiLSTM_v2", "seed": args.seed,
+    bundle = {"version": 4, "model": "BiLSTM_v2", "run_tag": RUN_TAG, "loss_mode": "length_weighted_line_mean", "seed": args.seed,
               "input_dim": input_dim, "hidden_dim": args.hidden_dim,
               "num_labels": NUM_LABELS, "dropout": args.dropout, "lstm_layers": args.lstm_layers,
               "state_dict": {k: v.cpu().clone() for k, v in full_model.state_dict().items()},
@@ -340,7 +337,7 @@ def main() -> int:
     args.model_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(bundle, args.model_path, compress=3)
 
-    report = {"version": 4, "model": "BiLSTM_v2", "train_rows": len(dense_train),
+    report = {"version": 4, "model": "BiLSTM_v2", "run_tag": RUN_TAG, "loss_mode": "length_weighted_line_mean", "train_rows": len(dense_train),
               "test_rows": len(dense_test), "folds": args.folds, "epochs": args.epochs,
               "input_dim": input_dim, "hidden_dim": args.hidden_dim,
               "final_epochs": final_epochs, "best_epochs": best_epochs,
