@@ -875,12 +875,162 @@ def main():
         "cwe_model_files": {s: seed_cwe_model(s) for s in seeds},
     }, MODEL_DIR / TABULAR_BUNDLE_NAME)
 
+    # ---- Phase 5: Meta-model with ngram features (v3.0) ----
+    print("\n=== Phase 5: Meta-model training (v3.0) ===")
+    meta_model = _train_meta_model(
+        all_rows, X, X_byte, y_label, y_cwe, cwe_ids, cwe_classes, feature_columns,
+        seeds, ensemble_config, args)
+    if meta_model is not None:
+        ensemble_config["meta_model_file"] = "cwe_meta_model_v3.0.joblib"
+        write_json(MODEL_DIR / FUSION_CONFIG_NAME, ensemble_config)
+        joblib.dump(meta_model, MODEL_DIR / "cwe_meta_model_v3.0.joblib")
+        print("Meta-model saved.")
+    else:
+        print("Meta-model skipped (no ngram dict or not enough data).")
+
     print(f"\n{'='*60}")
-    print(f"v2.6 training complete!")
-    print(f"Fusion mode: scalar + SWA + cosine + Capstone v2")
+    print(f"v3.0 training complete!")
+    print(f"Fusion mode: scalar + ngram meta-model")
     print(f"Avg scalar CWE macro: {avg_scalar:.4f}")
     print(f"Ensemble config: {MODEL_DIR / FUSION_CONFIG_NAME}")
     print(f"{'='*60}")
+
+
+def _train_meta_model(
+    all_rows, X, X_byte, y_label, y_cwe, cwe_ids,
+    cwe_classes, feature_columns, seeds, ensemble_config, args,
+):
+    """Train a lightweight meta-model on OOF predictions + ngram features.
+
+    Returns the trained meta-model (LightGBM dict) or None if skipped.
+    """
+    from cwe_ngram_features import extract_cwe_ngram_features, get_cwe_ngram_feature_names
+    import features
+    import lightgbm as lgb
+
+    # Check ngram dictionary exists
+    features._ensure_ngram_dict()
+    if not features._ngram_dict:
+        print("No ngram dictionary found — skipping meta-model.")
+        return None
+
+    n_total = len(all_rows)
+    n_train_orig = sum(1 for r in all_rows if r.get("_is_pseudo") != "1")
+    print(f"Training samples: {n_total} ({n_train_orig} original + {n_total - n_train_orig} pseudo)")
+
+    # Compute OOF ensemble predictions on the entire training set
+    print("Computing ensemble predictions on training set...")
+    all_label_probs = np.zeros(n_total, dtype=np.float32)
+    all_cwe_probs = np.zeros((n_total, len(cwe_classes)), dtype=np.float32)
+
+    fusion_threshold = float(ensemble_config["fusion_threshold"])
+    nw_label = float(ensemble_config["scalar_neural_label_weight"])
+    nw_cwe = float(ensemble_config["scalar_neural_cwe_weight"])
+    seed_weights = ensemble_config["seed_weights"]
+
+    for seed in seeds:
+        train_idx, val_idx = _split_indices(y_label, cwe_ids, rng_seed=seed)
+        # Load this seed's models
+        label_bundle = joblib.load(MODEL_DIR / seed_label_model(seed))
+        cwe_bundle = joblib.load(MODEL_DIR / seed_cwe_model(seed))
+        label_model = label_bundle["model"]
+        cwe_model = cwe_bundle["model"]
+
+        neural_bundle = torch.load(
+            MODEL_DIR / seed_neural_bundle(seed), map_location=DEVICE, weights_only=False)
+        from nn_models import ByteMetaMultiTaskNet, TabularNormalizer, apply_tabular_normalizer, predict_multitask
+        neural_model = ByteMetaMultiTaskNet(**neural_bundle["model_config"]).to(DEVICE)
+        neural_model.load_state_dict(neural_bundle["state_dict"])
+        neural_model.eval()
+        normalizer = TabularNormalizer(
+            mean=neural_bundle["normalizer"]["mean"].cpu().numpy().astype(np.float32),
+            std=neural_bundle["normalizer"]["std"].cpu().numpy().astype(np.float32),
+        )
+        X_tab = apply_tabular_normalizer(X, normalizer)
+
+        tree_lp = _aligned_positive_probability(label_model, X)
+        tree_cp = _aligned_cwe_probability(cwe_model, X, len(cwe_classes))
+        neural_lp, neural_cp = predict_multitask(
+            neural_model, X_byte, X_tab, batch_size=args.batch_size,
+            device=DEVICE, desc=f"Meta OOF seed={seed}")
+
+        sw = float(seed_weights.get(str(seed), 1.0 / len(seeds)))
+        all_label_probs += sw * (nw_label * neural_lp + (1.0 - nw_label) * tree_lp)
+        all_cwe_probs += sw * (nw_cwe * neural_cp + (1.0 - nw_cwe) * tree_cp)
+
+    # Extract ngram features for all training samples
+    print("Extracting ngram features for meta-model...")
+    ngram_feature_names = get_cwe_ngram_feature_names(features._ngram_classes)
+    ngram_matrix = np.zeros((n_total, len(ngram_feature_names)), dtype=np.float32)
+    from dataset import binary_path
+    from utils import tqdm as tqdm_local
+    for i, row in enumerate(tqdm_local(all_rows, desc="Meta ngram features", total=n_total)):
+        path = binary_path(BINARIES_DIR, row["binary_id"])
+        ngram_feats = extract_cwe_ngram_features(path, features._ngram_dict)
+        for j, name in enumerate(ngram_feature_names):
+            ngram_matrix[i, j] = ngram_feats.get(name, 0.0)
+
+    # Build meta-model input
+    file_sizes = X[:, 0:1]  # first feature is file_size
+    meta_X = np.hstack([
+        all_label_probs.reshape(-1, 1),
+        all_cwe_probs,
+        ngram_matrix,
+        file_sizes,
+    ]).astype(np.float32)
+    meta_feature_names = (
+        ["ens_label_prob"]
+        + [f"ens_cwe_{c}" for c in cwe_classes]
+        + ngram_feature_names
+        + ["file_size"]
+    )
+    print(f"Meta-model input: {meta_X.shape[1]} features ({meta_X.shape[0]} samples)")
+
+    # Only train meta-model on label=1 samples (where we have CWE ground truth)
+    pos_mask = y_label == 1
+    meta_X_pos = meta_X[pos_mask]
+    meta_y_pos = y_cwe[pos_mask]
+
+    # Filter: only original training samples (not pseudo) for meta-model training
+    n_train_original = sum(1 for i, r in enumerate(all_rows) if i < n_train_orig and y_label[i] == 1)
+    meta_X_train = meta_X_pos[:n_train_original] if n_train_original < len(meta_X_pos) else meta_X_pos
+    meta_y_train = meta_y_pos[:n_train_original] if n_train_original < len(meta_y_pos) else meta_y_pos
+
+    print(f"Meta-model training samples: {len(meta_y_train)} (label=1, original only)")
+
+    if len(meta_y_train) < len(cwe_classes) * 2:
+        print("Not enough training samples for meta-model — skipping.")
+        return None
+
+    # Train small LightGBM
+    meta_lgb = lgb.LGBMClassifier(
+        objective="multiclass", num_class=len(cwe_classes),
+        num_leaves=15, max_depth=4,
+        learning_rate=0.05, n_estimators=200,
+        subsample=0.8, colsample_bytree=0.8,
+        reg_alpha=0.1, reg_lambda=0.1,
+        random_state=42, n_jobs=4, verbose=-1,
+    )
+    meta_lgb.fit(meta_X_train, meta_y_train,
+                 feature_name=meta_feature_names)
+
+    # Evaluate on training set (for logging)
+    train_acc = meta_lgb.score(meta_X_train, meta_y_train)
+    print(f"Meta-model training accuracy: {train_acc:.4f}")
+
+    # Feature importance
+    importances = meta_lgb.feature_importances_
+    top_idx = np.argsort(importances)[-10:][::-1]
+    print("Top-10 meta-model features:")
+    for idx in top_idx:
+        print(f"  {meta_feature_names[idx]}: {importances[idx]:.5f}")
+
+    return {
+        "model": meta_lgb,
+        "feature_names": meta_feature_names,
+        "cwe_classes": cwe_classes,
+        "ngram_classes": features._ngram_classes,
+    }
 
 
 if __name__ == "__main__":

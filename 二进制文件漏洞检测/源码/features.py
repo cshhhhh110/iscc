@@ -10,9 +10,36 @@ import numpy as np
 import pefile
 
 from disasm_features import extract_disasm_features, get_disasm_feature_names
+from cwe_ngram_features import extract_cwe_ngram_features, get_cwe_ngram_feature_names, load_cwe_ngram_dict
 
 
 PathLike = Union[str, Path]
+
+# Module-level ngram dict (loaded lazily)
+_ngram_dict = None
+_ngram_classes: List[str] = []
+
+
+def _ensure_ngram_dict() -> None:
+    """Lazy-load CWE ngram dictionary if available."""
+    global _ngram_dict, _ngram_classes
+    if _ngram_dict is not None:
+        return
+    project_root = Path(__file__).resolve().parents[1]
+    candidates = [
+        project_root / "模型" / "cwe_ngram_dict_v3.0.json",
+        project_root / "模型" / "cwe_ngram_dict.json",
+    ]
+    for cand in candidates:
+        if cand.exists():
+            try:
+                _ngram_dict = load_cwe_ngram_dict(cand)
+                _ngram_classes = sorted(_ngram_dict.keys())
+                return
+            except Exception:
+                pass
+    _ngram_dict = {}  # sentinel: tried and failed
+    _ngram_classes = []
 
 ASCII_RE = re.compile(rb"[ -~]{4,}")
 
@@ -230,6 +257,10 @@ def get_feature_columns() -> List[str]:
     columns.extend(f"api_{name}" for name in API_NAMES)
     columns.extend(f"keyword_{name}" for name in STRING_KEYWORDS)
     columns.extend(get_disasm_feature_names())
+    # CWE n-gram dictionary features (v3.0)
+    _ensure_ngram_dict()
+    if _ngram_classes:
+        columns.extend(get_cwe_ngram_feature_names(_ngram_classes))
     return columns
 
 
@@ -257,7 +288,7 @@ def _section_entropy(section: pefile.SectionStructure) -> float:
 
 
 def _init_feature_dict() -> Dict[str, float]:
-    return {name: 0.0 for name in FEATURE_COLUMNS}
+    return {name: 0.0 for name in get_feature_columns()}
 
 
 def _count_patterns(text: str, patterns: Iterable[str]) -> Dict[str, float]:
@@ -325,6 +356,12 @@ def extract_features(binary_path: PathLike) -> Dict[str, float]:
     # Disassembly features (v2.3)
     disasm_feats = extract_disasm_features(path)
     feats.update(disasm_feats)
+
+    # CWE n-gram dictionary features (v3.0)
+    _ensure_ngram_dict()
+    if _ngram_dict:
+        ngram_feats = extract_cwe_ngram_features(path, _ngram_dict)
+        feats.update(ngram_feats)
 
     try:
         pe = pefile.PE(data=raw, fast_load=True)

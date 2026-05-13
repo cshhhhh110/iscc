@@ -1,4 +1,4 @@
-"""Prediction entrypoint for v2.6: weighted ensemble + scalar fusion + TTA."""
+"""Prediction entrypoint for v3.0: weighted ensemble + scalar fusion + TTA + meta-model."""
 
 from __future__ import annotations
 
@@ -150,7 +150,7 @@ def main():
     use_tta = int(fusion_config.get("tta_windows", 0)) > 1
     tta_windows = int(fusion_config.get("tta_windows", 3))
 
-    print(f"v2.6 prediction: fusion_mode={fusion_mode}, seeds={seeds}, tta={use_tta}({tta_windows} windows)")
+    print(f"v3.0 prediction: fusion_mode={fusion_mode}, seeds={seeds}, tta={use_tta}({tta_windows} windows)")
     print(f"device={DEVICE}, byte_length={byte_length}, batch_size={batch_size}")
 
     rows = read_csv_rows(TEST_CSV)
@@ -239,11 +239,55 @@ def main():
 
     fusion_threshold = float(fusion_config.get("fusion_threshold", 0.5))
 
+    # ---- Meta-model correction (v3.0) ----
+    meta_cwe_idx = None  # will use ensemble argmax if meta-model unavailable
+    meta_model_file = fusion_config.get("meta_model_file")
+    if meta_model_file:
+        meta_path = MODEL_DIR / meta_model_file
+        if meta_path.exists():
+            print("Applying meta-model CWE correction...")
+            meta_bundle = joblib.load(meta_path)
+            meta_model = meta_bundle["model"]
+            meta_ngram_classes = meta_bundle.get("ngram_classes", [])
+
+            from cwe_ngram_features import extract_cwe_ngram_features, get_cwe_ngram_feature_names
+            from features import _ensure_ngram_dict
+            _ensure_ngram_dict()
+            import features as feat_module
+            ngram_dict = getattr(feat_module, '_ngram_dict', {})
+            if ngram_dict:
+                ngram_fn = get_cwe_ngram_feature_names(meta_ngram_classes)
+                ngram_matrix = np.zeros((len(rows), len(ngram_fn)), dtype=np.float32)
+                for i, row in enumerate(tqdm(rows, desc="Ngram features", total=len(rows))):
+                    path = binary_path(BINARIES_DIR, row["binary_id"])
+                    feats = extract_cwe_ngram_features(path, ngram_dict)
+                    for j, name in enumerate(ngram_fn):
+                        ngram_matrix[i, j] = feats.get(name, 0.0)
+
+                meta_X = np.hstack([
+                    label_probs.reshape(-1, 1),
+                    cwe_probs,
+                    ngram_matrix,
+                    X[:, 0:1],  # file_size
+                ]).astype(np.float32)
+                meta_cwe_idx = meta_model.predict(meta_X)
+                print(f"Meta-model applied: {len(meta_ngram_classes)} classes, {meta_X.shape[1]} features")
+            else:
+                print("No ngram dict — using ensemble predictions.")
+        else:
+            print(f"Meta-model file not found: {meta_path} — using ensemble.")
+    else:
+        print("No meta-model in fusion_config — using ensemble predictions.")
+
     # Generate submission
     label_pred = (label_probs >= fusion_threshold).astype(int)
     cwe_pred = [""] * len(rows)
     for idx in np.where(label_pred == 1)[0]:
-        cwe_pred[idx] = cwe_classes[int(cwe_probs[idx].argmax())]
+        if meta_cwe_idx is not None:
+            mc = meta_cwe_idx[idx]
+            cwe_pred[idx] = cwe_classes[int(mc)] if mc < len(cwe_classes) else cwe_classes[int(cwe_probs[idx].argmax())]
+        else:
+            cwe_pred[idx] = cwe_classes[int(cwe_probs[idx].argmax())]
 
     with OUTPUT_CSV.open("w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
