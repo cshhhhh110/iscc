@@ -21,3 +21,5 @@
 | 05-11 15:05 | — | blend | v1.1+v1.4 50:50 | 50 | — | — | — | — | — | **0.709** | 零训练，破天花板 |
 | 05-11 15:05 | v1.9 | smoke | ft_4seed_ensemble | 50 | 1 | 2 | 0.2208 | 0.1582 | class_1:0.0000 | - | v1.4arch,2fold ensemble |
 | 05-11 15:05 | v1.9 | predict | ft_4seed_ensemble | 50 | - | 2 | - | - | - | - | submission=smoke_submission_gpu_v1.9.csv |
+| 05-13 01:42 | v2.0 | full | ft_deterministic | 50 | 3 | 5 | 0.9238 | 0.9190 | class_10:0.7585 | **0.70689** | 确定性CUDA，可复现，99.9min |
+| 05-13 01:42 | v2.0 | predict | ft_deterministic | 50 | - | 15 | - | - | - | - | submission=submission_v2_0.csv |
