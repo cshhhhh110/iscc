@@ -176,3 +176,22 @@
 [2026-05-12 23:25:20] Fold 5: epoch=22, score=0.963861. ckpt saved.
 [2026-05-12 23:25:21] OOF=0.961969, final_epochs=25.
 [2026-05-12 23:33:00] Training completed: 模型\model_bundle_nn_v2_pseudo.joblib
+[2026-05-13] v1.6 prep: fixed train_nn_v2.py seed ordering before model init, isolated v16 checkpoints with RUN_TAG, and reordered run_v16.ps1 to rebuild dense features before training.
+[2026-05-13] run_v16.ps1 pathing fix: switched to script-relative root detection and Unicode-safe directory assembly to avoid Chinese path garbling in PowerShell 5.1.
+[2026-05-13] train_nn_v2.py loss fix: changed v1.6 length weighting from doc-mean weighting to true line-level weighted mean and bumped run tag to v16_lwline.
+[2026-05-13 02:05:06] Training started (BiLSTM v2, seed=999, amp=True).
+[2026-05-13 02:15:26] Fold 1: epoch=23, score=0.949357. ckpt saved.
+[2026-05-13 02:26:06] Fold 2: epoch=28, score=0.961099. ckpt saved.
+[2026-05-13 02:34:38] Fold 3: epoch=17, score=0.944546. ckpt saved.
+[2026-05-13 02:40:57] Fold 4: epoch=11, score=0.872384. ckpt saved.
+[2026-05-13 02:46:21] Fold 5: epoch=8, score=0.845908. ckpt saved.
+[2026-05-13 02:46:22] OOF=0.914657, final_epochs=17.
+[2026-05-13 02:50:38] Training completed: E:\赛题数据\系统日志异常检测挑战\模型\model_bundle_nn_v2_seed999.joblib
+[2026-05-13 02:59:38] Training started (BiLSTM v2, seed=777, amp=True).
+[2026-05-13 03:10:45] Fold 1: epoch=30, score=0.941052. ckpt saved.
+[2026-05-13 03:20:19] Fold 2: epoch=14, score=0.897085. ckpt saved.
+[2026-05-13 03:26:56] Fold 3: epoch=8, score=0.908611. ckpt saved.
+[2026-05-13 03:38:27] Fold 4: epoch=23, score=0.945298. ckpt saved.
+[2026-05-13 03:49:14] Fold 5: epoch=20, score=0.940237. ckpt saved.
+[2026-05-13 03:49:15] OOF=0.926473, final_epochs=20.
+[2026-05-13 03:55:04] Training completed: E:\赛题数据\系统日志异常检测挑战\模型\model_bundle_nn_v2_seed777.joblib

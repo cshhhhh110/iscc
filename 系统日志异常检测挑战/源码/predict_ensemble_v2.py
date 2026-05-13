@@ -183,9 +183,9 @@ def _default_params():
     return {
         "type_thresholds": {label: 0.35 for label in ANOMALY_TYPES},
         "smoothing_window": 3, "gap_merge": 1,
-        "min_span_len": 2, "max_span_len": 15, "max_spans": 3,
+        "min_span_len": 2, "max_span_len": 18, "max_spans": 3,
         "doc_threshold": 0.5,
-        "long_doc_thr_offset": 0.05, "long_doc_max_len": 20,
+        "long_doc_thr_offset": 0.05, "long_doc_max_len": 25,
         "type_span_lengths": TYPE_SPAN_LENGTHS,
     }
 
@@ -199,9 +199,35 @@ def _score_params(params, search_docs, search_probs, search_doc_probs):
     return evaluate_predictions(search_docs, preds)["score"]
 
 
+def compute_train_span_stats(train_docs):
+    """Compute per-type span length percentiles from training data (v1.7: data-driven)."""
+    stats = {}
+    for label in ANOMALY_TYPES:
+        lengths = []
+        for doc in train_docs:
+            for span in doc.spans:
+                if span.label == label:
+                    lengths.append(span.end - span.start + 1)
+        if lengths:
+            a = np.array(lengths)
+            stats[label] = {
+                "min_len": max(1, int(np.percentile(a, 5))),
+                "target_len": int(np.median(a)),
+                "max_len": max(int(np.percentile(a, 5)) + 1, int(np.percentile(a, 95))),
+            }
+        else:
+            stats[label] = {"min_len": 2, "target_len": 4, "max_len": 10}
+    return stats
+
+
 def tune_all(docs, probs, doc_probs, n_trials=300):
     """Joint random search over ALL params (per-type thresholds + global) together."""
     rng = np.random.default_rng(DEFAULT_SEED + 777)
+
+    # Compute data-driven per-type span limits (v1.7)
+    span_stats = compute_train_span_stats(docs)
+    span_info = ", ".join(f"{k}={v['max_len']}" for k, v in sorted(span_stats.items()))
+    print(f"  Span stats (95p max_len): {span_info}")
 
     # Sample for speed
     y = np.array([d.has_anomaly for d in docs])
@@ -217,31 +243,30 @@ def tune_all(docs, probs, doc_probs, n_trials=300):
 
     sd = [docs[int(i)] for i in idx]; sp = [probs[int(i)] for i in idx]; sdp = doc_probs[idx]
 
-    # Predefined decoder grid for global params
     decoder_grid = [
-        (1, 0, 2, 8, 2), (1, 1, 2, 10, 2), (3, 0, 2, 8, 2),
-        (3, 1, 2, 10, 2), (3, 1, 2, 12, 2), (3, 1, 3, 10, 2),
-        (5, 1, 2, 10, 2), (5, 1, 3, 12, 2), (3, 2, 3, 12, 2),
-        (1, 0, 2, 10, 1), (3, 1, 2, 10, 1), (3, 1, 3, 12, 1),
+        (1, 0, 2, 2), (1, 1, 2, 2), (3, 0, 2, 2), (3, 1, 2, 2),
+        (3, 1, 3, 2), (5, 1, 2, 2), (5, 1, 3, 2), (3, 2, 3, 2),
+        (1, 0, 2, 1), (3, 1, 2, 1), (3, 1, 3, 1), (5, 1, 3, 1),
     ]
 
-    best_params = _default_params()
+    base_params = _default_params()
+    base_params["type_span_lengths"] = span_stats
+    best_params = base_params
     best_score = _score_params(best_params, sd, sp, sdp)
 
     for _ in tqdm(range(n_trials), desc="tune all params", unit="trial", dynamic_ncols=True):
         type_thr = {label: float(rng.uniform(0.15, 0.65)) for label in ANOMALY_TYPES}
-        sw, gm, msl, mxl, ms = decoder_grid[rng.integers(0, len(decoder_grid))]
+        sw, gm, msl, ms = decoder_grid[rng.integers(0, len(decoder_grid))]
         dt = float(rng.uniform(0.3, 0.7))
         ld_off = float(rng.uniform(0.0, 0.12))
-        ld_mxl = int(rng.integers(12, 28))
 
         params = {
             "type_thresholds": type_thr,
             "smoothing_window": int(sw), "gap_merge": int(gm),
-            "min_span_len": int(msl), "max_span_len": int(mxl),
+            "min_span_len": int(msl), "max_span_len": 99,
             "max_spans": int(ms), "doc_threshold": dt,
-            "long_doc_thr_offset": ld_off, "long_doc_max_len": ld_mxl,
-            "type_span_lengths": TYPE_SPAN_LENGTHS,
+            "long_doc_thr_offset": ld_off, "long_doc_max_len": 99,
+            "type_span_lengths": span_stats,
         }
         score = _score_params(params, sd, sp, sdp)
         if score > best_score:
@@ -250,9 +275,8 @@ def tune_all(docs, probs, doc_probs, n_trials=300):
     print(f"  Best OOF: {best_score:.6f}")
     print(f"  Thresholds: {', '.join(f'{k}={v:.3f}' for k, v in sorted(best_params['type_thresholds'].items(), key=lambda x: -x[1]))}")
     print(f"  Global: sw={best_params['smoothing_window']}, gm={best_params['gap_merge']}, "
-          f"msl={best_params['min_span_len']}, mxl={best_params['max_span_len']}, "
-          f"ms={best_params['max_spans']}, dt={best_params['doc_threshold']:.3f}, "
-          f"ld_off={best_params['long_doc_thr_offset']:.3f}, ld_mxl={best_params['long_doc_max_len']}")
+          f"msl={best_params['min_span_len']}, ms={best_params['max_spans']}, "
+          f"dt={best_params['doc_threshold']:.3f}, ld_off={best_params['long_doc_thr_offset']:.3f}")
     return best_params, best_score
 
 
