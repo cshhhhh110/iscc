@@ -879,7 +879,7 @@ def main():
     print("\n=== Phase 5: Meta-model training (v3.0) ===")
     meta_model = _train_meta_model(
         all_rows, X, X_byte, y_label, y_cwe, cwe_ids, cwe_classes, feature_columns,
-        seeds, ensemble_config, args)
+        seeds, ensemble_config, args, n_train_orig=len(train_rows))
     if meta_model is not None:
         ensemble_config["meta_model_file"] = "cwe_meta_model_v3.0.joblib"
         write_json(MODEL_DIR / FUSION_CONFIG_NAME, ensemble_config)
@@ -899,9 +899,11 @@ def main():
 def _train_meta_model(
     all_rows, X, X_byte, y_label, y_cwe, cwe_ids,
     cwe_classes, feature_columns, seeds, ensemble_config, args,
+    n_train_orig=0,
 ):
     """Train a lightweight meta-model on OOF predictions + ngram features.
 
+    Uses per-seed val-split OOF predictions where available to avoid overfitting.
     Returns the trained meta-model (LightGBM dict) or None if skipped.
     """
     from cwe_ngram_features import extract_cwe_ngram_features, get_cwe_ngram_feature_names
@@ -915,22 +917,22 @@ def _train_meta_model(
         return None
 
     n_total = len(all_rows)
-    n_train_orig = sum(1 for r in all_rows if r.get("_is_pseudo") != "1")
-    print(f"Training samples: {n_total} ({n_train_orig} original + {n_total - n_train_orig} pseudo)")
+    n_orig = n_train_orig if n_train_orig > 0 else n_total  # fallback
+    print(f"Training samples: {n_total} ({n_orig} original + {n_total - n_orig} pseudo)")
 
-    # Compute OOF ensemble predictions on the entire training set
-    print("Computing ensemble predictions on training set...")
-    all_label_probs = np.zeros(n_total, dtype=np.float32)
-    all_cwe_probs = np.zeros((n_total, len(cwe_classes)), dtype=np.float32)
-
-    fusion_threshold = float(ensemble_config["fusion_threshold"])
     nw_label = float(ensemble_config["scalar_neural_label_weight"])
     nw_cwe = float(ensemble_config["scalar_neural_cwe_weight"])
-    seed_weights = ensemble_config["seed_weights"]
 
+    # ---- Collect OOF predictions per seed ----
+    # Only use val-split predictions (true OOF) for meta-model input
+    oof_label_probs = np.zeros(n_total, dtype=np.float32)
+    oof_cwe_probs = np.zeros((n_total, len(cwe_classes)), dtype=np.float32)
+    oof_count = np.zeros(n_total, dtype=np.int32)
+
+    print("Collecting OOF ensemble predictions...")
     for seed in seeds:
         train_idx, val_idx = _split_indices(y_label, cwe_ids, rng_seed=seed)
-        # Load this seed's models
+        # Load seed models (trained on train_idx in Phase 3)
         label_bundle = joblib.load(MODEL_DIR / seed_label_model(seed))
         cwe_bundle = joblib.load(MODEL_DIR / seed_cwe_model(seed))
         label_model = label_bundle["model"]
@@ -946,17 +948,59 @@ def _train_meta_model(
             mean=neural_bundle["normalizer"]["mean"].cpu().numpy().astype(np.float32),
             std=neural_bundle["normalizer"]["std"].cpu().numpy().astype(np.float32),
         )
-        X_tab = apply_tabular_normalizer(X, normalizer)
+        X_val_tab = apply_tabular_normalizer(X[val_idx], normalizer)
 
-        tree_lp = _aligned_positive_probability(label_model, X)
-        tree_cp = _aligned_cwe_probability(cwe_model, X, len(cwe_classes))
-        neural_lp, neural_cp = predict_multitask(
-            neural_model, X_byte, X_tab, batch_size=args.batch_size,
-            device=DEVICE, desc=f"Meta OOF seed={seed}")
+        # Predict on val_idx only (true OOF)
+        tree_lp_val = _aligned_positive_probability(label_model, X[val_idx])
+        tree_cp_val = _aligned_cwe_probability(cwe_model, X[val_idx], len(cwe_classes))
+        neural_lp_val, neural_cp_val = predict_multitask(
+            neural_model, X_byte[val_idx], X_val_tab, batch_size=args.batch_size,
+            device=DEVICE, desc=f"Meta OOF s={seed}")
 
-        sw = float(seed_weights.get(str(seed), 1.0 / len(seeds)))
-        all_label_probs += sw * (nw_label * neural_lp + (1.0 - nw_label) * tree_lp)
-        all_cwe_probs += sw * (nw_cwe * neural_cp + (1.0 - nw_cwe) * tree_cp)
+        fused_lp = nw_label * neural_lp_val + (1.0 - nw_label) * tree_lp_val
+        fused_cp = nw_cwe * neural_cp_val + (1.0 - nw_cwe) * tree_cp_val
+
+        oof_label_probs[val_idx] += fused_lp
+        oof_cwe_probs[val_idx] += fused_cp
+        oof_count[val_idx] += 1
+
+    # Average OOF where multiple seeds covered the same sample
+    has_oof = oof_count > 0
+    oof_label_probs[has_oof] /= oof_count[has_oof].astype(np.float32)
+    oof_cwe_probs[has_oof] /= oof_count[has_oof].astype(np.float32)
+    print(f"OOF coverage: {has_oof.sum()}/{n_total} samples "
+          f"({100.0 * has_oof.sum() / n_total:.1f}%)")
+
+    # For samples without OOF, fill with per-seed ensemble mean (only as fallback)
+    # These samples won't be used for meta-model training anyway (below)
+    if has_oof.sum() < n_total:
+        print(f"Computing ensemble fill for {n_total - has_oof.sum()} non-OOF samples...")
+        for seed in seeds:
+            label_bundle = joblib.load(MODEL_DIR / seed_label_model(seed))
+            cwe_bundle = joblib.load(MODEL_DIR / seed_cwe_model(seed))
+            label_model = label_bundle["model"]
+            cwe_model = cwe_bundle["model"]
+            neural_bundle = torch.load(
+                MODEL_DIR / seed_neural_bundle(seed), map_location=DEVICE, weights_only=False)
+            neural_model = ByteMetaMultiTaskNet(**neural_bundle["model_config"]).to(DEVICE)
+            neural_model.load_state_dict(neural_bundle["state_dict"])
+            neural_model.eval()
+            normalizer = TabularNormalizer(
+                mean=neural_bundle["normalizer"]["mean"].cpu().numpy().astype(np.float32),
+                std=neural_bundle["normalizer"]["std"].cpu().numpy().astype(np.float32),
+            )
+            X_tab = apply_tabular_normalizer(X, normalizer)
+            tree_lp = _aligned_positive_probability(label_model, X)
+            tree_cp = _aligned_cwe_probability(cwe_model, X, len(cwe_classes))
+            neural_lp, neural_cp = predict_multitask(
+                neural_model, X_byte, X_tab, batch_size=args.batch_size,
+                device=DEVICE, desc=f"Meta fill s={seed}")
+            sw = float(ensemble_config["seed_weights"].get(str(seed), 1.0 / len(seeds)))
+            non_oof_mask = ~has_oof
+            oof_label_probs[non_oof_mask] += sw * (nw_label * neural_lp[non_oof_mask]
+                                                     + (1.0 - nw_label) * tree_lp[non_oof_mask])
+            oof_cwe_probs[non_oof_mask] += sw * (nw_cwe * neural_cp[non_oof_mask]
+                                                   + (1.0 - nw_cwe) * tree_cp[non_oof_mask])
 
     # Extract ngram features for all training samples
     print("Extracting ngram features for meta-model...")
@@ -971,10 +1015,10 @@ def _train_meta_model(
             ngram_matrix[i, j] = ngram_feats.get(name, 0.0)
 
     # Build meta-model input
-    file_sizes = X[:, 0:1]  # first feature is file_size
+    file_sizes = X[:, 0:1]
     meta_X = np.hstack([
-        all_label_probs.reshape(-1, 1),
-        all_cwe_probs,
+        oof_label_probs.reshape(-1, 1),
+        oof_cwe_probs,
         ngram_matrix,
         file_sizes,
     ]).astype(np.float32)
@@ -986,42 +1030,46 @@ def _train_meta_model(
     )
     print(f"Meta-model input: {meta_X.shape[1]} features ({meta_X.shape[0]} samples)")
 
-    # Only train meta-model on label=1 samples (where we have CWE ground truth)
-    pos_mask = y_label == 1
-    meta_X_pos = meta_X[pos_mask]
-    meta_y_pos = y_cwe[pos_mask]
+    # ---- Train meta-model only on OOF + original samples ----
+    # Filter: only original training samples (first n_orig rows, before pseudo-labels)
+    # AND only samples with OOF predictions
+    # AND only label=1 (where CWE ground truth exists)
+    pos_mask = np.zeros(n_total, dtype=bool)
+    pos_mask[:n_orig] = True  # original training rows
+    pos_mask &= has_oof     # OOF available
+    pos_mask &= (y_label == 1)  # has CWE label
 
-    # Filter: only original training samples (not pseudo) for meta-model training
-    n_train_original = sum(1 for i, r in enumerate(all_rows) if i < n_train_orig and y_label[i] == 1)
-    meta_X_train = meta_X_pos[:n_train_original] if n_train_original < len(meta_X_pos) else meta_X_pos
-    meta_y_train = meta_y_pos[:n_train_original] if n_train_original < len(meta_y_pos) else meta_y_pos
-
-    print(f"Meta-model training samples: {len(meta_y_train)} (label=1, original only)")
+    meta_X_train = meta_X[pos_mask]
+    meta_y_train = y_cwe[pos_mask]
+    print(f"Meta-model training samples: {len(meta_y_train)} "
+          f"(label=1, OOF, original only)")
 
     if len(meta_y_train) < len(cwe_classes) * 2:
         print("Not enough training samples for meta-model — skipping.")
         return None
 
-    # Train small LightGBM
+    # Train small LightGBM with strong regularization
     meta_lgb = lgb.LGBMClassifier(
         objective="multiclass", num_class=len(cwe_classes),
         num_leaves=15, max_depth=4,
         learning_rate=0.05, n_estimators=200,
         subsample=0.8, colsample_bytree=0.8,
         reg_alpha=0.1, reg_lambda=0.1,
+        min_child_samples=20,
         random_state=42, n_jobs=4, verbose=-1,
     )
     meta_lgb.fit(meta_X_train, meta_y_train,
                  feature_name=meta_feature_names)
 
-    # Evaluate on training set (for logging)
+    # Evaluate
     train_acc = meta_lgb.score(meta_X_train, meta_y_train)
     print(f"Meta-model training accuracy: {train_acc:.4f}")
 
     # Feature importance
     importances = meta_lgb.feature_importances_
-    top_idx = np.argsort(importances)[-10:][::-1]
-    print("Top-10 meta-model features:")
+    top_idx = np.argsort(importances)[-15:][::-1]
+    ngram_importance = sum(importances[-len(ngram_feature_names):])
+    print(f"Top-15 meta-model features (ngram total={ngram_importance:.4f}):")
     for idx in top_idx:
         print(f"  {meta_feature_names[idx]}: {importances[idx]:.5f}")
 
