@@ -91,7 +91,7 @@ def _build_cwe_gbdt(num_classes: int, class_weight_map: Dict[int, float], random
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train v1.5 ensemble with pseudo-labeling.")
+    parser = argparse.ArgumentParser(description="Train v3.0 ensemble with ngram meta-model.")
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--byte-length", type=int, default=8192)
@@ -718,7 +718,7 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     seeds = args.seeds
-    print(f"v2.6 ensemble training: seeds={seeds}, device={DEVICE}")
+    print(f"v3.0 ensemble training: seeds={seeds}, device={DEVICE}")
     print(f"pseudo-label thresholds: label>{PSEUDO_LABEL_THRESH_HIGH}/<{PSEUDO_LABEL_THRESH_LOW}, cwe>{PSEUDO_CWE_THRESH}")
 
     # ---- Phase 1: Pseudo-labeling ----
@@ -816,7 +816,7 @@ def main():
                              "dropout": args.dropout, "byte_embedding_dim": args.byte_embedding_dim},
             "normalizer": {"mean": torch.from_numpy(normalizer.mean), "std": torch.from_numpy(normalizer.std)},
             "feature_columns": feature_columns, "cwe_classes": cwe_classes,
-            "byte_length": int(args.byte_length), "metrics": neural_metrics, "model_version": "v2.6", "seed": seed,
+            "byte_length": int(args.byte_length), "metrics": neural_metrics, "model_version": "v3.0", "seed": seed,
         }, MODEL_DIR / seed_neural_bundle(seed))
 
         # Scalar fusion grid search on val set
@@ -874,7 +874,7 @@ def main():
                                         weights=cwe_scores))
 
     ensemble_config = {
-        "model_version": "v2.6",
+        "model_version": "v3.0",
         "device": str(DEVICE),
         "byte_length": int(args.byte_length),
         "batch_size": int(args.batch_size),
@@ -903,7 +903,7 @@ def main():
     # Save combined tabular bundle (pointing to per-seed files)
     joblib.dump({
         "seeds": seeds, "feature_columns": feature_columns, "cwe_classes": cwe_classes,
-        "model_version": "v2.6", "label_model_files": {s: seed_label_model(s) for s in seeds},
+        "model_version": "v3.0", "label_model_files": {s: seed_label_model(s) for s in seeds},
         "cwe_model_files": {s: seed_cwe_model(s) for s in seeds},
     }, MODEL_DIR / TABULAR_BUNDLE_NAME)
 
