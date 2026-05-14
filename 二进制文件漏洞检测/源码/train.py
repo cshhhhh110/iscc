@@ -1,4 +1,4 @@
-"""v2.6 training: v2.4 backbone + extended Capstone (trigram hash + call neighborhood + stack frame)."""
+"""v3.0 training: CWE byte n-gram dictionary + lightweight meta-model correction."""
 
 from __future__ import annotations
 
@@ -35,11 +35,11 @@ from nn_models import (
 from utils import write_json
 
 ROOT = Path(__file__).resolve().parents[1]
-TRAIN_CSV = ROOT / "train.csv"
-TEST_CSV = ROOT / "test.csv"
-BINARIES_DIR = ROOT / "binaries"
-MODEL_DIR = ROOT / "模型"
-OUTPUT_DIR = ROOT / "提交结果"
+TRAIN_CSV = ROOT / "data" / "train.csv"
+TEST_CSV = ROOT / "data" / "test.csv"
+BINARIES_DIR = ROOT.parent / "binaries"
+MODEL_DIR = ROOT / "models"
+OUTPUT_DIR = ROOT / "output"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 _GBDT_BACKEND = None
@@ -200,7 +200,7 @@ def _load_or_build_byte_cache(rows: List[Dict[str, str]], byte_length: int) -> D
 
 def _pseudo_label_test_set(args: argparse.Namespace) -> List[Dict[str, str]]:
     """Use v1.5 ensemble models to generate high-confidence pseudo-labels for test.csv."""
-    pseudo_csv = ROOT / PSEUDO_TRAIN_CSV
+    pseudo_csv = ROOT / "data" / PSEUDO_TRAIN_CSV
     if pseudo_csv.exists() and not args.retrain_tree:
         print(f"Loading cached pseudo-labels from {pseudo_csv}")
         return read_csv_rows(pseudo_csv)
@@ -727,7 +727,7 @@ def main():
     if not args.skip_pseudo:
         pseudo_rows = _pseudo_label_test_set(args)
     else:
-        pseudo_path = ROOT / PSEUDO_TRAIN_CSV
+        pseudo_path = ROOT / "data" / PSEUDO_TRAIN_CSV
         if pseudo_path.exists():
             pseudo_rows = read_csv_rows(pseudo_path)
             print(f"Loaded {len(pseudo_rows)} cached pseudo-labels")
@@ -737,6 +737,23 @@ def main():
 
     all_rows = train_rows + pseudo_rows
     print(f"Combined training samples: {len(all_rows)} ({len(pseudo_rows)} pseudo + {len(train_rows)} original)")
+
+    # ---- Phase 1.5: Auto-build CWE n-gram dictionary (if missing) ----
+    ngram_dict_path = MODEL_DIR / "cwe_ngram_dict_v3.0.json"
+    if not ngram_dict_path.exists():
+        print("\n=== Phase 1.5: Auto-building CWE n-gram dictionary ===")
+        from cwe_ngram_features import build_cwe_ngram_dict
+        build_cwe_ngram_dict(
+            train_csv=TRAIN_CSV,
+            binaries_dir=BINARIES_DIR,
+            output_path=ngram_dict_path,
+        )
+        # Reload features module to pick up new dict
+        import features as _feat_mod
+        _feat_mod._ngram_dict = None
+        _feat_mod._ngram_classes = []
+    else:
+        print("CWE n-gram dictionary found, skipping build.")
 
     # ---- Phase 2: Feature extraction ----
     print("\n=== Phase 2: Feature extraction ===")
@@ -763,8 +780,20 @@ def main():
 
     # ---- Phase 3: Multi-seed training ----
     print("\n=== Phase 3: Multi-seed training ===")
-    seed_results = {}
+    ckpt_path = MODEL_DIR / "train_ckpt_v3.0.joblib"
+    if ckpt_path.exists():
+        ckpt = joblib.load(ckpt_path)
+        completed_seeds = set(ckpt.get("completed_seeds", []))
+        seed_results = ckpt.get("seed_results", {})
+        print(f"Resuming from checkpoint: {len(completed_seeds)}/{len(seeds)} seeds done "
+              f"({sorted(completed_seeds)})")
+    else:
+        completed_seeds = set()
+        seed_results = {}
     for seed in seeds:
+        if seed in completed_seeds:
+            print(f"\nSeed {seed} already completed, skipping")
+            continue
         print(f"\n{'='*60}")
         print(f"Training seed={seed}")
         print(f"{'='*60}")
@@ -822,7 +851,10 @@ def main():
             "neural_label_f1": float(neural_metrics["label_f1"]),
             "neural_cwe_macro": float(neural_metrics["cwe_macro_f1"]),
         }
-        print(f"Seed {seed} done: scalar_cwe={s_cm:.4f}")
+        completed_seeds.add(seed)
+        joblib.dump({"completed_seeds": sorted(completed_seeds), "seed_results": seed_results},
+                    ckpt_path, compress=3)
+        print(f"Seed {seed} done: scalar_cwe={s_cm:.4f}  [ckpt saved]")
 
     # ---- Phase 4: Save ensemble config ----
     print("\n=== Phase 4: Saving ensemble config ===")
@@ -830,15 +862,15 @@ def main():
     print(f"Average scalar_cwe={avg_scalar:.4f}")
 
     # Weighted ensemble: weight each seed by its scalar_cwe performance
-    cwe_scores = np.array([r["scalar_cwe_macro"] for r in seed_results.values()])
+    cwe_scores = np.array([seed_results[s]["scalar_cwe_macro"] for s in seeds])
     seed_weights_arr = cwe_scores / cwe_scores.sum()
     seed_weights = {str(s): float(seed_weights_arr[i]) for i, s in enumerate(seeds)}
     print(f"Seed weights: {', '.join(f's{s}={w:.3f}' for s, w in seed_weights.items())}")
 
     # Average scalar weights (weighted by seed performance)
-    weighted_nw_label = float(np.average([r["scalar_neural_label_weight"] for r in seed_results.values()],
+    weighted_nw_label = float(np.average([seed_results[s]["scalar_neural_label_weight"] for s in seeds],
                                           weights=cwe_scores))
-    weighted_nw_cwe = float(np.average([r["scalar_neural_cwe_weight"] for r in seed_results.values()],
+    weighted_nw_cwe = float(np.average([seed_results[s]["scalar_neural_cwe_weight"] for s in seeds],
                                         weights=cwe_scores))
 
     ensemble_config = {
@@ -856,7 +888,7 @@ def main():
         "scalar_tree_label_weight": float(1.0 - weighted_nw_label),
         "scalar_neural_cwe_weight": float(weighted_nw_cwe),
         "scalar_tree_cwe_weight": float(1.0 - weighted_nw_cwe),
-        "fusion_threshold": float(np.mean([r["scalar_threshold"] for r in seed_results.values()])),
+        "fusion_threshold": float(np.mean([seed_results[s]["scalar_threshold"] for s in seeds])),
         "seed_results": {str(s): r for s, r in seed_results.items()},
         "avg_scalar_cwe_macro": float(avg_scalar),
         "cwe_loss_weight": float(args.cwe_loss_weight),
@@ -894,6 +926,10 @@ def main():
     print(f"Avg scalar CWE macro: {avg_scalar:.4f}")
     print(f"Ensemble config: {MODEL_DIR / FUSION_CONFIG_NAME}")
     print(f"{'='*60}")
+
+    # Clean up checkpoint on success
+    if ckpt_path.exists():
+        ckpt_path.unlink()
 
 
 def _train_meta_model(

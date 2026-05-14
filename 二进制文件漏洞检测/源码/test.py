@@ -34,10 +34,10 @@ from nn_models import (
 from utils import read_json
 
 ROOT = Path(__file__).resolve().parents[1]
-TEST_CSV = ROOT / "test.csv"
-BINARIES_DIR = ROOT / "binaries"
-MODEL_DIR = ROOT / "模型"
-OUTPUT_DIR = ROOT / "提交结果"
+TEST_CSV = ROOT / "data" / "test.csv"
+BINARIES_DIR = ROOT.parent / "binaries"
+MODEL_DIR = ROOT / "models"
+OUTPUT_DIR = ROOT / "output"
 OUTPUT_CSV = OUTPUT_DIR / SUBMISSION_NAME
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
