@@ -1,0 +1,65 @@
+{
+  "model_version": "v3.0",
+  "device": "cuda",
+  "byte_length": 8192,
+  "batch_size": 64,
+  "epochs": 30,
+  "seeds": [
+    42,
+    123,
+    202
+  ],
+  "num_pseudo_labels": 17343,
+  "fusion_mode": "scalar",
+  "tta_windows": 3,
+  "seed_weights": {
+    "42": 0.338715844597391,
+    "123": 0.3266625650561108,
+    "202": 0.3346215903464982
+  },
+  "scalar_neural_label_weight": 0.5670381485861419,
+  "scalar_tree_label_weight": 0.4329618514138581,
+  "scalar_neural_cwe_weight": 0.34982397268888016,
+  "scalar_tree_cwe_weight": 0.6501760273111199,
+  "fusion_threshold": 0.47000000000000036,
+  "seed_results": {
+    "42": {
+      "scalar_label_f1": 0.9815221368459568,
+      "scalar_cwe_macro": 0.9516427049058305,
+      "scalar_threshold": 0.4200000000000003,
+      "scalar_neural_label_weight": 0.625,
+      "scalar_tree_label_weight": 0.375,
+      "scalar_neural_cwe_weight": 0.55,
+      "scalar_tree_cwe_weight": 0.44999999999999996,
+      "neural_label_f1": 0.9794457698660305,
+      "neural_cwe_macro": 0.9476849085540271
+    },
+    "123": {
+      "scalar_label_f1": 0.9853022230387654,
+      "scalar_cwe_macro": 0.9177782851315383,
+      "scalar_threshold": 0.5300000000000004,
+      "scalar_neural_label_weight": 0.55,
+      "scalar_tree_label_weight": 0.44999999999999996,
+      "scalar_neural_cwe_weight": 0.47500000000000003,
+      "scalar_tree_cwe_weight": 0.5249999999999999,
+      "neural_label_f1": 0.9849894097062345,
+      "neural_cwe_macro": 0.9164137177479208
+    },
+    "202": {
+      "scalar_label_f1": 0.9860856829000366,
+      "scalar_cwe_macro": 0.9401396493150208,
+      "scalar_threshold": 0.46000000000000035,
+      "scalar_neural_label_weight": 0.525,
+      "scalar_tree_label_weight": 0.475,
+      "scalar_neural_cwe_weight": 0.025,
+      "scalar_tree_cwe_weight": 0.975,
+      "neural_label_f1": 0.984945841747751,
+      "neural_cwe_macro": 0.9203136523236404
+    }
+  },
+  "avg_scalar_cwe_macro": 0.9365202131174631,
+  "cwe_loss_weight": 2.0,
+  "focal_gamma": 1.5,
+  "gbdt_backend": "lightgbm",
+  "meta_model_file": "cwe_meta_model_v3.0.joblib"
+}
