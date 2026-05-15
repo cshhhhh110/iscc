@@ -91,7 +91,7 @@ def _build_cwe_gbdt(num_classes: int, class_weight_map: Dict[int, float], random
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train v3.0 ensemble with ngram meta-model.")
+    parser = argparse.ArgumentParser(description="Train v3.1 ensemble with segmented ngram + fold-safe meta-model.")
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--byte-length", type=int, default=8192)
@@ -244,12 +244,12 @@ def _pseudo_label_test_set(args: argparse.Namespace) -> List[Dict[str, str]]:
     # Ensemble predict: average all v1.5 seeds
     all_tree_lp, all_tree_cp, all_neural_lp, all_neural_cp = [], [], [], []
     for seed in v5_seeds:
-        lb = joblib.load(MODEL_DIR / seed_label_model(seed).replace("v1.6", "v1.5"))
-        cb = joblib.load(MODEL_DIR / seed_cwe_model(seed).replace("v1.6", "v1.5"))
+        lb = joblib.load(MODEL_DIR / seed_label_model(seed).replace(MODEL_VERSION, "v1.5"))
+        cb = joblib.load(MODEL_DIR / seed_cwe_model(seed).replace(MODEL_VERSION, "v1.5"))
         all_tree_lp.append(_aligned_positive_probability_v4(lb["model"], X_test))
         all_tree_cp.append(_aligned_cwe_probability_v4(cb["model"], X_test, len(cwe_classes)))
 
-        nb_path = MODEL_DIR / seed_neural_bundle(seed).replace("v1.6", "v1.5")
+        nb_path = MODEL_DIR / seed_neural_bundle(seed).replace(MODEL_VERSION, "v1.5")
         nb = torch.load(nb_path, map_location=DEVICE, weights_only=False)
         nm = ByteMetaMultiTaskNet(**nb["model_config"]).to(DEVICE)
         nm.load_state_dict(nb["state_dict"])
@@ -718,7 +718,7 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     seeds = args.seeds
-    print(f"v3.0 ensemble training: seeds={seeds}, device={DEVICE}")
+    print(f"v3.1 ensemble training: seeds={seeds}, device={DEVICE}")
     print(f"pseudo-label thresholds: label>{PSEUDO_LABEL_THRESH_HIGH}/<{PSEUDO_LABEL_THRESH_LOW}, cwe>{PSEUDO_CWE_THRESH}")
 
     # ---- Phase 1: Pseudo-labeling ----
@@ -780,7 +780,7 @@ def main():
 
     # ---- Phase 3: Multi-seed training ----
     print("\n=== Phase 3: Multi-seed training ===")
-    ckpt_path = MODEL_DIR / "train_ckpt_v3.0.joblib"
+    ckpt_path = MODEL_DIR / "train_ckpt_v3.1.joblib"
     if ckpt_path.exists():
         ckpt = joblib.load(ckpt_path)
         completed_seeds = set(ckpt.get("completed_seeds", []))
@@ -816,7 +816,7 @@ def main():
                              "dropout": args.dropout, "byte_embedding_dim": args.byte_embedding_dim},
             "normalizer": {"mean": torch.from_numpy(normalizer.mean), "std": torch.from_numpy(normalizer.std)},
             "feature_columns": feature_columns, "cwe_classes": cwe_classes,
-            "byte_length": int(args.byte_length), "metrics": neural_metrics, "model_version": "v3.0", "seed": seed,
+            "byte_length": int(args.byte_length), "metrics": neural_metrics, "model_version": "v3.1", "seed": seed,
         }, MODEL_DIR / seed_neural_bundle(seed))
 
         # Scalar fusion grid search on val set
@@ -874,7 +874,7 @@ def main():
                                         weights=cwe_scores))
 
     ensemble_config = {
-        "model_version": "v3.0",
+        "model_version": "v3.1",
         "device": str(DEVICE),
         "byte_length": int(args.byte_length),
         "batch_size": int(args.batch_size),
@@ -903,12 +903,12 @@ def main():
     # Save combined tabular bundle (pointing to per-seed files)
     joblib.dump({
         "seeds": seeds, "feature_columns": feature_columns, "cwe_classes": cwe_classes,
-        "model_version": "v3.0", "label_model_files": {s: seed_label_model(s) for s in seeds},
+        "model_version": "v3.1", "label_model_files": {s: seed_label_model(s) for s in seeds},
         "cwe_model_files": {s: seed_cwe_model(s) for s in seeds},
     }, MODEL_DIR / TABULAR_BUNDLE_NAME)
 
     # ---- Phase 5: Meta-model with ngram features (v3.0) ----
-    print("\n=== Phase 5: Meta-model training (v3.0) ===")
+    print("\n=== Phase 5: Meta-model training (v3.1) ===")
     meta_model = _train_meta_model(
         all_rows, X, X_byte, y_label, y_cwe, cwe_ids, cwe_classes, feature_columns,
         seeds, ensemble_config, args, n_train_orig=len(train_rows))
@@ -921,7 +921,7 @@ def main():
         print("Meta-model skipped (no ngram dict or not enough data).")
 
     print(f"\n{'='*60}")
-    print(f"v3.0 training complete!")
+    print(f"v3.1 training complete!")
     print(f"Fusion mode: scalar + ngram meta-model")
     print(f"Avg scalar CWE macro: {avg_scalar:.4f}")
     print(f"Ensemble config: {MODEL_DIR / FUSION_CONFIG_NAME}")
@@ -968,15 +968,19 @@ def _train_meta_model(
     print("Collecting OOF ensemble predictions...")
     for seed in seeds:
         train_idx, val_idx = _split_indices(y_label, cwe_ids, rng_seed=seed)
-        # Load seed models (trained on train_idx in Phase 3)
-        label_bundle = joblib.load(MODEL_DIR / seed_label_model(seed))
-        cwe_bundle = joblib.load(MODEL_DIR / seed_cwe_model(seed))
-        label_model = label_bundle["model"]
-        cwe_model = cwe_bundle["model"]
+        # Retrain tabular models on train_idx for pure OOF (same split as neural)
+        label_model_val = _build_label_ensemble(random_state=seed)
+        label_model_val.fit(X[train_idx], y_label[train_idx])
+        pos_mask_tr = y_label[train_idx] == 1
+        cwe_model_val = _build_cwe_gbdt(
+            len(cwe_classes),
+            _cwe_class_weight_map(y_cwe[train_idx][pos_mask_tr], len(cwe_classes)),
+            random_state=seed,
+        )
+        cwe_model_val.fit(X[train_idx][pos_mask_tr], y_cwe[train_idx][pos_mask_tr])
 
         neural_bundle = torch.load(
             MODEL_DIR / seed_neural_bundle(seed), map_location=DEVICE, weights_only=False)
-        from nn_models import ByteMetaMultiTaskNet, TabularNormalizer, apply_tabular_normalizer, predict_multitask
         neural_model = ByteMetaMultiTaskNet(**neural_bundle["model_config"]).to(DEVICE)
         neural_model.load_state_dict(neural_bundle["state_dict"])
         neural_model.eval()
@@ -986,9 +990,9 @@ def _train_meta_model(
         )
         X_val_tab = apply_tabular_normalizer(X[val_idx], normalizer)
 
-        # Predict on val_idx only (true OOF)
-        tree_lp_val = _aligned_positive_probability(label_model, X[val_idx])
-        tree_cp_val = _aligned_cwe_probability(cwe_model, X[val_idx], len(cwe_classes))
+        # Predict on val_idx only (true OOF for both tabular and neural)
+        tree_lp_val = _aligned_positive_probability(label_model_val, X[val_idx])
+        tree_cp_val = _aligned_cwe_probability(cwe_model_val, X[val_idx], len(cwe_classes))
         neural_lp_val, neural_cp_val = predict_multitask(
             neural_model, X_byte[val_idx], X_val_tab, batch_size=args.batch_size,
             device=DEVICE, desc=f"Meta OOF s={seed}")

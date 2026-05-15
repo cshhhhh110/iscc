@@ -1,16 +1,18 @@
-"""v3.1 ablation: compare 4 meta-model configurations from cached OOF assets.
+"""v3.1 ablation: isolate ngram and meta-model contributions from cached OOF assets.
 
 Usage: python ablation_v3.1.py [--ablation-path models/ablation_v3.1.joblib]
 
-Reads OOF predictions + ngram features saved during training, then trains
-4 lightweight meta-model variants to isolate the contribution of each component:
+Reads OOF predictions + ngram features saved during training, then compares:
 
-  1. v2.4 baseline:  OOF label + CWE probs + file_size  (NO ngram, NO meta)
-  2. v2.4 + ngram:   baseline + ngram features           (NO meta correction)
-  3. v2.4 + meta:    baseline + meta-model               (NO ngram features)
-  4. v3.1 full:      baseline + ngram + meta-model       (full v3.1)
+  1. Baseline:        argmax on OOF CWE probs (pure ensemble, no meta-model)
+  2. Meta only:       LightGBM on base_X (ensemble preds + file_size, NO ngram)
+  3. Full v3.1:       LightGBM on base_X + ngram_X (full meta-model)
 
-All 4 run in seconds since the heavy training is already cached.
+Ngram contribution = f1_3 - f1_2  (what segment features add beyond meta correction)
+Meta contribution  = f1_2 - f1_1  (what meta-model adds beyond raw argmax)
+Total gain          = f1_3 - f1_1  (combined v3.1 improvement over baseline)
+
+All 3 run in seconds since the heavy training is already cached.
 """
 
 from __future__ import annotations
@@ -92,36 +94,32 @@ def main():
 
     ngram_X = data["ngram_matrix"].astype(np.float32)
 
-    # 1. v2.4 baseline (no ngram)
-    print("\n--- 1. v2.4 baseline (no ngram, no meta) ---")
-    f1_1, _ = _train_and_eval(base_X[train_pos], y_cwe[train_pos],
-                                base_X[eval_pos], y_cwe[eval_pos], n_classes)
+    # 1. Baseline: argmax on raw OOF CWE probs (no meta-model at all)
+    print("\n--- 1. Baseline (pure ensemble argmax, no meta) ---")
+    y_eval = y_cwe[eval_pos]
+    oof_cp = data["oof_cwe_probs"][eval_pos]
+    y_pred_1 = oof_cp.argmax(axis=1)
+    f1_1 = _cwe_macro_f1(y_eval, y_pred_1)
     print(f"  CWE Macro-F1: {f1_1:.4f}")
 
-    # 2. v2.4 + ngram (no meta)
-    print("\n--- 2. v2.4 + ngram (no meta) ---")
-    X2 = np.hstack([base_X, ngram_X]).astype(np.float32)
-    f1_2, _ = _train_and_eval(X2[train_pos], y_cwe[train_pos],
-                                X2[eval_pos], y_cwe[eval_pos], n_classes)
+    # 2. Meta only: LightGBM on base_X (no ngram features)
+    print("\n--- 2. Meta only (ensemble + file_size, NO ngram) ---")
+    f1_2, model_2 = _train_and_eval(base_X[train_pos], y_cwe[train_pos],
+                                      base_X[eval_pos], y_eval, n_classes)
     print(f"  CWE Macro-F1: {f1_2:.4f}  (Δ vs baseline: {f1_2 - f1_1:+.4f})")
 
-    # 3. v2.4 + meta only (no ngram)
-    print("\n--- 3. v2.4 + meta only (no ngram) ---")
-    f1_3, _ = _train_and_eval(base_X[train_pos], y_cwe[train_pos],
-                                base_X[eval_pos], y_cwe[eval_pos], n_classes)
+    # 3. Full v3.1: LightGBM on base_X + ngram_X
+    print("\n--- 3. Full v3.1 (ensemble + file_size + ngram) ---")
+    X_full = np.hstack([base_X, ngram_X]).astype(np.float32)
+    f1_3, model_3 = _train_and_eval(X_full[train_pos], y_cwe[train_pos],
+                                      X_full[eval_pos], y_eval, n_classes)
     print(f"  CWE Macro-F1: {f1_3:.4f}  (Δ vs baseline: {f1_3 - f1_1:+.4f})")
 
-    # 4. v3.1 full (ngram + meta)
-    print("\n--- 4. v3.1 full (ngram + meta) ---")
-    f1_4, _ = _train_and_eval(X2[train_pos], y_cwe[train_pos],
-                                X2[eval_pos], y_cwe[eval_pos], n_classes)
-    print(f"  CWE Macro-F1: {f1_4:.4f}  (Δ vs baseline: {f1_4 - f1_1:+.4f})")
-
     print("\n=== Summary ===")
-    print(f"  v2.4 baseline:       {f1_1:.4f}")
-    print(f"  v2.4 + ngram only:   {f1_2:.4f}  (ngram contribution: {f1_2 - f1_1:+.4f})")
-    print(f"  v2.4 + meta only:    {f1_3:.4f}  (meta contribution:  {f1_3 - f1_1:+.4f})")
-    print(f"  v3.1 full:           {f1_4:.4f}  (combined:           {f1_4 - f1_1:+.4f})")
+    print(f"  Baseline (pure ensemble):    {f1_1:.4f}")
+    print(f"  Meta only (no ngram):        {f1_2:.4f}  (meta contribution:    {f1_2 - f1_1:+.4f})")
+    print(f"  Full v3.1 (ngram + meta):    {f1_3:.4f}  (ngram contribution:   {f1_3 - f1_2:+.4f})")
+    print(f"  Total gain vs baseline:      {f1_3 - f1_1:+.4f}")
 
 
 if __name__ == "__main__":
