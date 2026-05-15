@@ -27,6 +27,7 @@ def _ensure_ngram_dict() -> None:
         return
     project_root = Path(__file__).resolve().parents[1]
     candidates = [
+        project_root / "models" / "cwe_ngram_dict_v3.1.json",
         project_root / "models" / "cwe_ngram_dict_v3.0.json",
         project_root / "models" / "cwe_ngram_dict.json",
     ]

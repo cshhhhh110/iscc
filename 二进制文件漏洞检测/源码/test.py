@@ -1,4 +1,4 @@
-"""Prediction entrypoint for v3.0: weighted ensemble + scalar fusion + TTA + meta-model."""
+"""Prediction entrypoint for v3.1: weighted ensemble + scalar fusion + TTA + meta-model."""
 
 from __future__ import annotations
 
@@ -150,7 +150,7 @@ def main():
     use_tta = int(fusion_config.get("tta_windows", 0)) > 1
     tta_windows = int(fusion_config.get("tta_windows", 3))
 
-    print(f"v3.0 prediction: fusion_mode={fusion_mode}, seeds={seeds}, tta={use_tta}({tta_windows} windows)")
+    print(f"v3.1 prediction: fusion_mode={fusion_mode}, seeds={seeds}, tta={use_tta}({tta_windows} windows)")
     print(f"device={DEVICE}, byte_length={byte_length}, batch_size={batch_size}")
 
     rows = read_csv_rows(TEST_CSV)

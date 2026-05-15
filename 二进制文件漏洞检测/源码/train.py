@@ -1,4 +1,4 @@
-"""v3.0 training: CWE byte n-gram dictionary + lightweight meta-model correction."""
+"""v3.1 training: CWE segmented byte n-gram + fold-safe OOF + lightweight meta-model correction."""
 
 from __future__ import annotations
 
@@ -739,7 +739,7 @@ def main():
     print(f"Combined training samples: {len(all_rows)} ({len(pseudo_rows)} pseudo + {len(train_rows)} original)")
 
     # ---- Phase 1.5: Auto-build CWE n-gram dictionary (if missing) ----
-    ngram_dict_path = MODEL_DIR / "cwe_ngram_dict_v3.0.json"
+    ngram_dict_path = MODEL_DIR / "cwe_ngram_dict_v3.1.json"
     if not ngram_dict_path.exists():
         print("\n=== Phase 1.5: Auto-building CWE n-gram dictionary ===")
         from cwe_ngram_features import build_cwe_ngram_dict
@@ -913,9 +913,9 @@ def main():
         all_rows, X, X_byte, y_label, y_cwe, cwe_ids, cwe_classes, feature_columns,
         seeds, ensemble_config, args, n_train_orig=len(train_rows))
     if meta_model is not None:
-        ensemble_config["meta_model_file"] = "cwe_meta_model_v3.0.joblib"
+        ensemble_config["meta_model_file"] = "cwe_meta_model_v3.1.joblib"
         write_json(MODEL_DIR / FUSION_CONFIG_NAME, ensemble_config)
-        joblib.dump(meta_model, MODEL_DIR / "cwe_meta_model_v3.0.joblib")
+        joblib.dump(meta_model, MODEL_DIR / "cwe_meta_model_v3.1.joblib")
         print("Meta-model saved.")
     else:
         print("Meta-model skipped (no ngram dict or not enough data).")
@@ -1038,17 +1038,35 @@ def _train_meta_model(
             oof_cwe_probs[non_oof_mask] += sw * (nw_cwe * neural_cp[non_oof_mask]
                                                    + (1.0 - nw_cwe) * tree_cp[non_oof_mask])
 
-    # Extract ngram features for all training samples
-    print("Extracting ngram features for meta-model...")
+    # Extract N-gram features with fold-safe dictionaries (v3.1)
+    print("Extracting fold-safe ngram features for meta-model...")
     ngram_feature_names = get_cwe_ngram_feature_names(features._ngram_classes)
     ngram_matrix = np.zeros((n_total, len(ngram_feature_names)), dtype=np.float32)
     from dataset import binary_path
     from utils import tqdm as tqdm_local
-    for i, row in enumerate(tqdm_local(all_rows, desc="Meta ngram features", total=n_total)):
-        path = binary_path(BINARIES_DIR, row["binary_id"])
-        ngram_feats = extract_cwe_ngram_features(path, features._ngram_dict)
-        for j, name in enumerate(ngram_feature_names):
-            ngram_matrix[i, j] = ngram_feats.get(name, 0.0)
+    from cwe_ngram_features import build_cwe_ngram_dict_for_rows
+
+    for seed in seeds:
+        train_idx, val_idx = _split_indices(y_label, cwe_ids, rng_seed=seed)
+        fold_rows = [all_rows[i] for i in train_idx]
+        print(f"  Building fold dict seed={seed} ({len(fold_rows)} samples)...")
+        fold_dict = build_cwe_ngram_dict_for_rows(fold_rows, BINARIES_DIR)
+        for i in tqdm_local(val_idx, desc=f"Fold ngram s={seed}", total=len(val_idx)):
+            row = all_rows[i]
+            path = binary_path(BINARIES_DIR, row["binary_id"])
+            feats = extract_cwe_ngram_features(path, fold_dict)
+            for j, name in enumerate(ngram_feature_names):
+                ngram_matrix[i, j] = feats.get(name, 0.0)
+
+    # Fill non-OOF samples with global dict features
+    if has_oof.sum() < n_total:
+        non_oof_idx = np.where(~has_oof)[0]
+        print(f"  Filling {len(non_oof_idx)} non-OOF samples with global dict...")
+        for i in tqdm_local(non_oof_idx, desc="Ngram fill", total=len(non_oof_idx)):
+            path = binary_path(BINARIES_DIR, all_rows[i]["binary_id"])
+            feats = extract_cwe_ngram_features(path, features._ngram_dict)
+            for j, name in enumerate(ngram_feature_names):
+                ngram_matrix[i, j] = feats.get(name, 0.0)
 
     # Build meta-model input
     file_sizes = X[:, 0:1]
@@ -1108,6 +1126,22 @@ def _train_meta_model(
     print(f"Top-15 meta-model features (ngram total={ngram_importance:.4f}):")
     for idx in top_idx:
         print(f"  {meta_feature_names[idx]}: {importances[idx]:.5f}")
+
+    # Save ablation assets for offline analysis (v3.1)
+    ablation_path = MODEL_DIR / "ablation_v3.1.joblib"
+    joblib.dump({
+        "oof_label_probs": oof_label_probs,
+        "oof_cwe_probs": oof_cwe_probs,
+        "ngram_matrix": ngram_matrix,
+        "ngram_feature_names": ngram_feature_names,
+        "y_label": y_label,
+        "y_cwe": y_cwe,
+        "cwe_classes": cwe_classes,
+        "file_sizes": X[:, 0].copy(),
+        "has_oof": has_oof,
+        "n_orig": n_orig,
+    }, ablation_path)
+    print(f"Saved ablation assets to {ablation_path}")
 
     return {
         "model": meta_lgb,
