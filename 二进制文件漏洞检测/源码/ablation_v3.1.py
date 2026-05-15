@@ -76,12 +76,13 @@ def main():
     pos_mask &= has_oof
     pos_mask &= (y_label == 1)
 
-    # Hold-out split: 80% train / 20% eval for ablation
-    rng = np.random.RandomState(42)
-    idx = rng.permutation(pos_mask.sum())
-    n_train = int(len(idx) * 0.8)
-    train_pos = np.where(pos_mask)[0][idx[:n_train]]
-    eval_pos = np.where(pos_mask)[0][idx[n_train:]]
+    # Hold-out split: 80% train / 20% eval, stratified by CWE
+    from sklearn.model_selection import train_test_split
+    pos_indices = np.where(pos_mask)[0]
+    train_pos, eval_pos = train_test_split(
+        pos_indices, test_size=0.2, random_state=42,
+        stratify=y_cwe[pos_mask],
+    )
 
     print(f"  Ablation train: {len(train_pos)}, eval: {len(eval_pos)}")
 
