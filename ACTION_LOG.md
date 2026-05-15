@@ -13,7 +13,7 @@
 
 | 项目 | 当前版本 | 主要产物 | 项目级日志 |
 |---|---|---|---|
-| powershell恶意脚本检测 | original | `模型/model_bundle.joblib`，`提交结果/submission.csv` | `powershell恶意脚本检测/ACTION_LOG.md` |
+| powershell恶意脚本检测 | v3.7_align ✅ 平台 0.70831 | `版本记录/v3.7_align/`，exact_key5特征对齐，class1 +46 | `powershell恶意脚本检测/ACTION_LOG.md` |
 | 二进制文件漏洞检测 | v1.5 ✅ 平台 0.923 | `提交结果/submission_v1.5.csv`，平台 Macro-F1=0.923，伪标签+3-seed集成+TTA | `二进制文件漏洞检测/ACTION_LOG.md` |
 | 系统日志异常检测挑战 | v1.1 | `系统日志异常检测挑战/版本记录/v1.1/模型/model_bundle.joblib`，`系统日志异常检测挑战/版本记录/v1.1/提交结果/submission.csv` | `系统日志异常检测挑战/ACTION_LOG.md` |
 | 网络安全智能分类挑战 | v1.3（源码已就绪，模型/提交结果待本机训练） | `版本记录/v1.3/源码/`，`模型/gpu_model_bundle_v1.3.pt`，`提交结果/submission_gpu_v1.3.csv` | `网络安全智能分类挑战/ACTION_LOG.md` |
@@ -47,10 +47,11 @@
 
 ### powershell恶意脚本检测
 
-- 当前状态：已完成可提交基线
-- 当前结果：`submission.csv`
-- 当前指标：OOF Macro-F1 `0.755080`
-- 版本归档：`版本记录/original/源码`、`版本记录/original/模型`、`版本记录/original/提交结果`
+- 当前状态：v3.7_align ✅ 平台 0.70831
+- 当前结果：`版本记录/v3.7_align/提交结果/submission_v3.7_align.csv`
+- 当前指标：平台 Macro-F1=0.70831（v3.3: 0.70441，+0.0039），class1 3308→3354 (+46)
+- 关键改动：exact_key5 特征对齐（132→137维），根因修复 teacher/student 表示不匹配
+- 版本归档：`版本记录/original/` ~ `版本记录/v3.7_align/`
 
 ### 二进制文件漏洞检测
 
@@ -89,3 +90,6 @@
 - 2026-05-10 22:31:05 powershell恶意脚本检测 v1.6; selected=fusion; oof_macro_f1=0.755472
 - 2026-05-11 13:48:27 powershell CMD v1.7; selected=fusion; oof_macro_f1=0.755537
 - 2026-05-11 15:29:48 powershell CMD v1.7; selected=fusion; oof_macro_f1=0.755350
+- 2026-05-13 13:19:20 powershell v1.12 LGB+XGB 100-model ensemble; oof_macro_f1=0.754355
+- 2026-05-13 15:11:18 powershell v1.13 adaptive LGB+XGB 100-model ensemble; oof_macro_f1=0.751889; weighted_oof=0.750297
+- 2026-05-15 20:45:00 powershell v3.7_align: exact_key5特征对齐（132→137维），根因修复teacher/student表示不匹配。class1 3308→3354(+46)，平台Macro-F1=0.70831(+0.0039)。自动候选选择+c1 guard。归档到版本记录/v3.7_align/，更新README和项目状态。

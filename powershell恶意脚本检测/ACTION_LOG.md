@@ -61,3 +61,4 @@
 - 2026-05-15 09:00:00 v4.1 Router: LGBM router (exact vs neighbor vs prior), Canary-G=0.322 Canary-S=0.745, best trade-off; 归档
 - 2026-05-13 02:00:00 v1.9 AB test: fusion裸 platform=0.690, tree裸 platform=0.689
 - 2026-05-13 02:30:00 v1.10: 分class伪标签阈值(class 2降门槛0.05-0.20) + tree-only; 归档v1.9到版本记录/
+- 2026-05-15 20:30:00 v3.7_align: exact_key5特征对齐（132→137维），根因修复teacher/student表示不匹配。class1 3308→3354(+46)，平台0.70831(+0.0039)。5个exact_key频次特征提供test/all侧分布信息，属合法transductive feature。自动候选选择+c1 guard。归档到版本记录/v3.7_align/。
