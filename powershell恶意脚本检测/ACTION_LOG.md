@@ -47,4 +47,17 @@
 - 2026-05-13 01:34:14 trained v1.9 fusion+pseudo; oof=0.774921(student虚高); teacher_oof=0.755362; pseudo=6137@th=0.85; device=cuda
 - 2026-05-13 01:40:00 v1.9 fusion+pseudo platform=0.69150 (worse than v1.8 tree+pseudo 0.69779)
 - 2026-05-13 02:00:00 v1.9 AB test: fusion裸 platform=0.690, tree裸 platform=0.689
+- 2026-05-13 02:30:00 v1.10: 分class伪标签阈值(class 2降门槛0.05-0.20) + tree-only; platform=0.688
+- 2026-05-13 03:00:00 v1.11: LGB+XGB+RF hybrid (40/40/20) + pseudo; platform 待提交
+- 2026-05-13 03:30:00 v2.0: Mega Ensemble (LGB+XGB, 10seeds×5folds=100模型) + pseudo; 代码打包
+- 2026-05-13 04:00:00 v3.0: Condition-Aware KD — StratifiedGroupKFold + 132维特征 + SMOTE + 4 Teacher + 45 Student LGBMRegressor; 参考0.713方案复现; 全新源码_v3目录
+- 2026-05-15 02:00:00 v4.0: 三层架构(查表+归纳+伪标签) + Canary-G/S度量体系; A/B/C/C1/C2/D1全实验矩阵
+- 2026-05-15 06:00:00 v4.0 A: baseline LGBM, Canary-G=0.237 Canary-S=0.712
+- 2026-05-15 06:30:00 v4.0 B: +lookup layer (18 keys, 11.6%), Canary-S +0.002, Canary-G unchanged
+- 2026-05-15 07:00:00 v4.0 C1: +KD distillation, Canary-S +0.033→0.747, strongest single gain
+- 2026-05-15 07:30:00 v4.0 C2: +pseudo-label (447 capped), zero gain, abandoned
+- 2026-05-15 08:00:00 v4.0 D1: weighted Hamming backoff, Canary-G +0.088→0.325 (first ever!), Canary-S -0.081
+- 2026-05-15 08:30:00 v4.0 D1 v2: tightened backoff, Canary-G=0.323 Canary-S=0.721
+- 2026-05-15 09:00:00 v4.1 Router: LGBM router (exact vs neighbor vs prior), Canary-G=0.322 Canary-S=0.745, best trade-off; 归档
+- 2026-05-13 02:00:00 v1.9 AB test: fusion裸 platform=0.690, tree裸 platform=0.689
 - 2026-05-13 02:30:00 v1.10: 分class伪标签阈值(class 2降门槛0.05-0.20) + tree-only; 归档v1.9到版本记录/
